@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git push:*)",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nInitial commit - CIS Microsoft 365 Foundations Benchmark v2.3.2\n\nComplete PowerShell module for auditing Microsoft 365 environments against CIS Benchmark v5.0.0.\n\nFeatures:\n- 130 automated compliance checks across 9 sections\n- Connect-CISBenchmark function for easy authentication\n- Auto-detection of tenant information\n- HTML and CSV report generation\n- PowerShell 5.1 and 7+ compatibility\nEOF\n)\")",
+      "Bash(git config:*)",
+      "Bash(git branch:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
