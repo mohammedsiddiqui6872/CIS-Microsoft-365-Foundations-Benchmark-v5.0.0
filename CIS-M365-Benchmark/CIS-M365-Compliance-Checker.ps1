@@ -1451,8 +1451,19 @@ function Test-EntraID {
         $authMethodPolicy = Get-MgPolicyAuthenticationMethodPolicyAuthenticationMethodConfiguration -AuthenticationMethodConfigurationId "MicrosoftAuthenticator"
 
         $featureSettings = $authMethodPolicy.AdditionalProperties.featureSettings
-        $numberMatching = $featureSettings.numberMatchingRequiredState.state
-        $additionalContext = $featureSettings.displayAppInformationRequiredState.state
+
+        # Access nested hashtable properties correctly
+        $numberMatching = if ($featureSettings.numberMatchingRequiredState) {
+            $featureSettings.numberMatchingRequiredState['state']
+        } else {
+            $null
+        }
+
+        $additionalContext = if ($featureSettings.displayAppInformationRequiredState) {
+            $featureSettings.displayAppInformationRequiredState['state']
+        } else {
+            $null
+        }
 
         if ($numberMatching -eq "enabled" -and $additionalContext -eq "enabled") {
             Add-Result -ControlNumber "5.2.3.1" -ControlTitle "Ensure Microsoft Authenticator is configured to protect against MFA fatigue" `

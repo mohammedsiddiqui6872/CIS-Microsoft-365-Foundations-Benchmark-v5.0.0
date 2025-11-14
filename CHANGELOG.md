@@ -2,7 +2,13 @@
 
 All notable changes to the CIS Microsoft 365 Foundations Benchmark Compliance Checker.
 
-## [2.3.4] - Current Version
+## [2.3.7] - Current Version
+
+### Bug Fix - Microsoft Authenticator Number Matching Detection
+
+**Fixed Control 5.2.3.1**: Corrected hashtable property access for Microsoft Authenticator MFA fatigue protection settings. The control was returning empty values for number matching due to incorrect nested hashtable property access. Now properly detects both number matching and app context configuration.
+
+## [2.3.4] - Previous Version
 
 ### Latest Updates
 

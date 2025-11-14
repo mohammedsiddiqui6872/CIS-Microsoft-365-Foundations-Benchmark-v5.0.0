@@ -12,7 +12,7 @@
 RootModule = 'CIS-M365-Benchmark.psm1'
 
 # Version number of this module.
-ModuleVersion = '2.3.6'
+ModuleVersion = '2.3.7'
 
 # Supported PSEditions
 CompatiblePSEditions = @('Desktop', 'Core')
@@ -122,6 +122,23 @@ PrivateData = @{
 
         # ReleaseNotes of this module
         ReleaseNotes = @'
+## v2.3.7 - Bug Fix for Microsoft Authenticator Number Matching Detection
+
+### Critical Fix - Control 5.2.3.1
+- **Fixed Control 5.2.3.1**: Corrected hashtable property access for Microsoft Authenticator settings
+  - Control 5.2.3.1 "Ensure Microsoft Authenticator is configured to protect against MFA fatigue" was returning empty value for number matching
+  - Issue was caused by incorrect nested hashtable property access in PowerShell
+  - Now correctly reads both `numberMatchingRequiredState.state` and `displayAppInformationRequiredState.state`
+  - Users with number matching enabled will now see "Pass" instead of "Fail" with empty details
+
+### What This Fixes
+- Number matching detection now works correctly
+- No more false "Fail" results when number matching is properly configured
+- Proper display of both number matching and app context status in reports
+
+### Technical Details
+Changed from direct property access (`$featureSettings.numberMatchingRequiredState.state`) to hashtable key access (`$featureSettings.numberMatchingRequiredState['state']`) to correctly read nested Graph API response objects.
+
 ## v2.3.6 - Critical Fix for False Positive
 
 ### Critical Fix - Control 5.1.2.4
