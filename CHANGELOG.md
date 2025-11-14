@@ -2,7 +2,23 @@
 
 All notable changes to the CIS Microsoft 365 Foundations Benchmark Compliance Checker.
 
-## [2.4.0] - Current Version
+## [2.4.1] - Current Version
+
+### Bug Fixes - User-Reported Issues
+
+**Fixed FOUR Controls Based on User Feedback**:
+
+1. **Control 5.1.3.1 - Dynamic Guest Group Detection**: Enhanced membership rule pattern matching to handle multiple formats including `user.userType -eq "Guest"`, `user.userType -eq 'Guest'`, and `(user.userType -eq "Guest")`. Removed restrictive Property parameter that was preventing MembershipRule from being retrieved. Now displays the matched rule in Pass details for verification.
+
+2. **Control 5.2.3.1 - Microsoft Authenticator MFA Fatigue**: Improved hashtable property access with dual fallback methods (bracket notation and dot notation). Added explicit null handling that treats unconfigured settings as "not configured" instead of empty values. Fixes issue where number matching showed blank value despite being enabled.
+
+3. **Control 5.2.3.2 - Custom Banned Passwords**: Enhanced API access by switching from `Get-MgBetaDirectorySetting` to direct Graph API call (`/beta/settings`). Added robust error handling with fallback to manual check when API is unavailable. Improved parsing to handle both comma and tab-delimited password lists.
+
+4. **Control 7.2.3 - SharePoint External Sharing**: Strengthened validation logic by using explicit array matching (`-in` operator) instead of chained OR conditions. Added string normalization (`.ToString().Trim()`) to handle potential type mismatches. Now uses compliant values array for clearer validation logic.
+
+**Note**: Control 5.2.4.1 (SSPR for All Users) was already correctly marked as MANUAL in v2.3.8. Users seeing this as "Fail" are running an outdated version.
+
+## [2.4.0] - Previous Version
 
 ### Critical False Positive Fixes - Batch 2 (Complete)
 

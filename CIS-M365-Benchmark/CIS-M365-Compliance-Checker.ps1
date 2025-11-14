@@ -1051,21 +1051,27 @@ function Test-EntraID {
         $guestDynamicGroup = $null
 
         foreach ($group in $guestGroups) {
-            $groupDetails = Get-MgGroup -GroupId $group.Id -Property MembershipRule
-            if ($groupDetails.MembershipRule -like "*userType -eq 'Guest'*") {
-                $guestDynamicGroup = $group
+            # Get the full group details including MembershipRule
+            $groupDetails = Get-MgGroup -GroupId $group.Id
+
+            # Check for various formats of the membership rule
+            # Common formats: user.userType -eq "Guest", (user.userType -eq "Guest"), user.userType -eq 'Guest'
+            if ($groupDetails.MembershipRule -and
+                ($groupDetails.MembershipRule -match "user\.userType\s*-eq\s*[`"']?Guest[`"']?" -or
+                 $groupDetails.MembershipRule -match "\(user\.userType\s*-eq\s*[`"']?Guest[`"']?\)")) {
+                $guestDynamicGroup = $groupDetails
                 break
             }
         }
 
         if ($guestDynamicGroup) {
             Add-Result -ControlNumber "5.1.3.1" -ControlTitle "Ensure a dynamic group for guest users is created" `
-                       -ProfileLevel "L1" -Result "Pass" -Details "Dynamic guest user group exists: $($guestDynamicGroup.DisplayName)"
+                       -ProfileLevel "L1" -Result "Pass" -Details "Dynamic guest user group exists: $($guestDynamicGroup.DisplayName) (Rule: $($guestDynamicGroup.MembershipRule))"
         }
         else {
             Add-Result -ControlNumber "5.1.3.1" -ControlTitle "Ensure a dynamic group for guest users is created" `
                        -ProfileLevel "L1" -Result "Fail" -Details "No dynamic guest user group found" `
-                       -Remediation "Create dynamic group with membership rule: user.userType -eq 'Guest'"
+                       -Remediation "Create dynamic group with membership rule: user.userType -eq `"Guest`""
         }
     }
     catch {
@@ -1569,20 +1575,32 @@ function Test-EntraID {
         Write-Log "Checking 5.2.3.1 - Authenticator MFA fatigue protection" -Level Info
         $authMethodPolicy = Get-MgPolicyAuthenticationMethodPolicyAuthenticationMethodConfiguration -AuthenticationMethodConfigurationId "MicrosoftAuthenticator"
 
-        $featureSettings = $authMethodPolicy.AdditionalProperties.featureSettings
+        $featureSettings = $authMethodPolicy.AdditionalProperties['featureSettings']
 
-        # Access nested hashtable properties correctly
-        $numberMatching = if ($featureSettings.numberMatchingRequiredState) {
-            $featureSettings.numberMatchingRequiredState['state']
-        } else {
-            $null
+        # Access nested hashtable properties correctly - try multiple access methods
+        $numberMatching = $null
+        if ($featureSettings) {
+            if ($featureSettings['numberMatchingRequiredState']) {
+                $numberMatching = $featureSettings['numberMatchingRequiredState']['state']
+            }
+            elseif ($featureSettings.numberMatchingRequiredState) {
+                $numberMatching = $featureSettings.numberMatchingRequiredState.state
+            }
         }
 
-        $additionalContext = if ($featureSettings.displayAppInformationRequiredState) {
-            $featureSettings.displayAppInformationRequiredState['state']
-        } else {
-            $null
+        $additionalContext = $null
+        if ($featureSettings) {
+            if ($featureSettings['displayAppInformationRequiredState']) {
+                $additionalContext = $featureSettings['displayAppInformationRequiredState']['state']
+            }
+            elseif ($featureSettings.displayAppInformationRequiredState) {
+                $additionalContext = $featureSettings.displayAppInformationRequiredState.state
+            }
         }
+
+        # Treat null as not enabled
+        if (-not $numberMatching) { $numberMatching = "not configured" }
+        if (-not $additionalContext) { $additionalContext = "not configured" }
 
         if ($numberMatching -eq "enabled" -and $additionalContext -eq "enabled") {
             Add-Result -ControlNumber "5.2.3.1" -ControlTitle "Ensure Microsoft Authenticator is configured to protect against MFA fatigue" `
@@ -1604,33 +1622,45 @@ function Test-EntraID {
     try {
         Write-Log "Checking 5.2.3.2 - Custom banned passwords" -Level Info
 
-        # Check directory settings for Password Rule Settings template
-        $passwordSettings = Get-MgBetaDirectorySetting | Where-Object {
-            $_.TemplateId -eq "5cf42378-d67d-4f36-ba46-e8b86229381d"
-        }
+        # Try using the authentication strength policy API first (modern approach)
+        try {
+            $passwordPolicy = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/beta/settings" -ErrorAction SilentlyContinue
 
-        if ($passwordSettings) {
-            # Extract the BannedPasswordList value
-            $bannedPasswords = $passwordSettings.Values | Where-Object {
-                $_.Name -eq "BannedPasswordList"
-            } | Select-Object -ExpandProperty Value
+            # Look for password settings in directory settings
+            $passwordSetting = $passwordPolicy.value | Where-Object {
+                $_.displayName -eq "Password Rule Settings" -or
+                $_.templateId -eq "5cf42378-d67d-4f36-ba46-e8b86229381d"
+            }
 
-            if ($bannedPasswords -and $bannedPasswords.Trim() -ne "") {
-                # Count entries (tab-delimited)
-                $passwordCount = ($bannedPasswords -split "`t" | Where-Object { $_ -ne "" }).Count
-                Add-Result -ControlNumber "5.2.3.2" -ControlTitle "Ensure custom banned passwords lists are used" `
-                           -ProfileLevel "L1" -Result "Pass" -Details "Custom banned password list configured with $passwordCount entries"
+            if ($passwordSetting) {
+                # Extract BannedPasswordList from values array
+                $bannedPasswordsValue = $passwordSetting.values | Where-Object { $_.name -eq "BannedPasswordList" }
+
+                if ($bannedPasswordsValue -and $bannedPasswordsValue.value -and $bannedPasswordsValue.value.Trim() -ne "") {
+                    # Count entries (comma or tab delimited)
+                    $passwords = $bannedPasswordsValue.value -split "[,\t]" | Where-Object { $_.Trim() -ne "" }
+                    $passwordCount = $passwords.Count
+                    Add-Result -ControlNumber "5.2.3.2" -ControlTitle "Ensure custom banned passwords lists are used" `
+                               -ProfileLevel "L1" -Result "Pass" -Details "Custom banned password list configured with $passwordCount entries"
+                }
+                else {
+                    Add-Result -ControlNumber "5.2.3.2" -ControlTitle "Ensure custom banned passwords lists are used" `
+                               -ProfileLevel "L1" -Result "Fail" -Details "Password protection configured but no custom banned passwords defined" `
+                               -Remediation "Add custom banned passwords in Entra ID > Security > Authentication methods > Password protection"
+                }
             }
             else {
+                # Fall back to checking if ANY custom list exists via alternate method
                 Add-Result -ControlNumber "5.2.3.2" -ControlTitle "Ensure custom banned passwords lists are used" `
-                           -ProfileLevel "L1" -Result "Fail" -Details "Password protection configured but no custom banned passwords defined" `
-                           -Remediation "Add custom banned passwords in Entra ID > Security > Authentication methods > Password protection"
+                           -ProfileLevel "L1" -Result "Manual" -Details "Unable to verify custom banned password list via API. Please verify manually in Entra ID portal." `
+                           -Remediation "Check Entra ID > Security > Authentication methods > Password protection > Custom banned passwords"
             }
         }
-        else {
+        catch {
+            # Final fallback - mark as manual check
             Add-Result -ControlNumber "5.2.3.2" -ControlTitle "Ensure custom banned passwords lists are used" `
-                       -ProfileLevel "L1" -Result "Fail" -Details "Password protection settings not configured" `
-                       -Remediation "Configure custom banned password list in Entra ID > Security > Authentication methods > Password protection"
+                       -ProfileLevel "L1" -Result "Manual" -Details "API access unavailable. Please verify manually that custom banned passwords are configured." `
+                       -Remediation "Check Entra ID > Security > Authentication methods > Password protection > Add custom banned passwords (minimum 1 entry)"
         }
     }
     catch {
@@ -2225,21 +2255,25 @@ function Test-SharePointOnline {
         Write-Log "Checking 7.2.3 - External sharing restricted" -Level Info
         $spoTenant = Get-SPOTenant
 
+        # Normalize the sharing capability value (trim whitespace and handle string type)
+        $sharingValue = $spoTenant.SharingCapability.ToString().Trim()
+
         # Acceptable values per CIS Benchmark:
         # - ExternalUserSharingOnly (New and existing guests) - Recommended for secure collaboration
         # - ExistingExternalUserSharingOnly (Existing guests only) - More restrictive
         # - Disabled (Only people in your organization) - Most restrictive
         # NOT acceptable: ExternalUserAndGuestSharing (Anyone)
-        if ($spoTenant.SharingCapability -eq "ExternalUserSharingOnly" -or
-            $spoTenant.SharingCapability -eq "ExistingExternalUserSharingOnly" -or
-            $spoTenant.SharingCapability -eq "Disabled") {
+
+        $acceptableValues = @("ExternalUserSharingOnly", "ExistingExternalUserSharingOnly", "Disabled")
+
+        if ($sharingValue -in $acceptableValues) {
             Add-Result -ControlNumber "7.2.3" -ControlTitle "Ensure external content sharing is restricted" `
-                       -ProfileLevel "L1" -Result "Pass" -Details "External sharing: $($spoTenant.SharingCapability)"
+                       -ProfileLevel "L1" -Result "Pass" -Details "External sharing: $sharingValue (compliant)"
         }
         else {
             Add-Result -ControlNumber "7.2.3" -ControlTitle "Ensure external content sharing is restricted" `
-                       -ProfileLevel "L1" -Result "Fail" -Details "External sharing too permissive: $($spoTenant.SharingCapability)" `
-                       -Remediation "Set-SPOTenant -SharingCapability ExternalUserSharingOnly (New and existing guests)"
+                       -ProfileLevel "L1" -Result "Fail" -Details "External sharing too permissive: $sharingValue" `
+                       -Remediation "Set-SPOTenant -SharingCapability ExternalUserSharingOnly"
         }
     }
     catch {

@@ -12,7 +12,7 @@
 RootModule = 'CIS-M365-Benchmark.psm1'
 
 # Version number of this module.
-ModuleVersion = '2.4.0'
+ModuleVersion = '2.4.1'
 
 # Supported PSEditions
 CompatiblePSEditions = @('Desktop', 'Core')
@@ -122,17 +122,25 @@ PrivateData = @{
 
         # ReleaseNotes of this module
         ReleaseNotes = @'
+## v2.4.1 - Bug Fixes for User-Reported Issues
+
+Fixed FOUR controls based on user feedback:
+- 5.1.3.1: Dynamic guest group detection now handles multiple membership rule formats
+- 5.2.3.1: Enhanced Microsoft Authenticator property access with better null handling
+- 5.2.3.2: Improved custom banned password detection with fallback to manual check
+- 7.2.3: Strengthened SharePoint external sharing validation with explicit array matching
+
 ## v2.4.0 - Critical False Positive Fixes (Batch 2 - COMPLETE)
 
 Fixed ELEVEN additional controls to eliminate false positives:
-- 5.2.2.4: Admin sign-in frequency now validates actual value (≤4 hours)
-- 5.2.2.10: MFA registration now validates managed device requirement
-- 5.2.2.11: Intune enrollment now validates "every time" frequency
+- 5.2.2.4: Admin sign-in frequency validates actual value (≤4 hours)
+- 5.2.2.10: MFA registration validates managed device requirement
+- 5.2.2.11: Intune enrollment validates "every time" frequency
 - 5.2.3.6: System-preferred MFA fixed hashtable property access
-- 6.5.3: OWA storage providers checks all policies (not hardcoded name)
+- 6.5.3: OWA storage providers checks all policies
 - 8.2.1: Teams external domains fixed contradictory logic
 - 7.2.4: OneDrive sharing accepts ExternalUserSharingOnly
-- 8.4.1: Teams app policies uses correct cmdlet (AppPermissionPolicy)
+- 8.4.1: Teams app policies uses correct cmdlet
 - 5.2.2.3: Legacy auth enhanced client type validation
 - 7.3.4: Site custom scripts improved filtering
 - CA Enhancements: Report-only detection + exclusion warnings
