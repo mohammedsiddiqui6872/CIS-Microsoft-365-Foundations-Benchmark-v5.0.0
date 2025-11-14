@@ -58,6 +58,7 @@ $Script:FailedControls = 0
 $Script:ManualControls = 0
 $Script:ErrorControls = 0
 $Script:MsolConnected = $false
+$Script:RequestedProfileLevel = $ProfileLevel
 
 #region Helper Functions
 
@@ -91,6 +92,17 @@ function Add-Result {
         [string]$Details,
         [string]$Remediation = ""
     )
+
+    # Filter based on requested profile level
+    # If user requested L1, only show L1 controls
+    # If user requested L2, only show L2 controls
+    # If user requested All, show all controls
+    if ($Script:RequestedProfileLevel -ne 'All') {
+        if ($ProfileLevel -ne $Script:RequestedProfileLevel) {
+            # Skip this control as it doesn't match the requested profile
+            return
+        }
+    }
 
     $Script:TotalControls++
 
