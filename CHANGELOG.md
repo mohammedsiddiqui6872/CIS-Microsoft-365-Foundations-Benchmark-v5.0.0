@@ -2,7 +2,35 @@
 
 All notable changes to the CIS Microsoft 365 Foundations Benchmark Compliance Checker.
 
-## [2.4.1] - Current Version
+## [2.4.2] - Current Version
+
+### Comprehensive False Positive Fixes - Critical Validation Logic Improvements
+
+**Fixed SIX Controls Based on Comprehensive Review**:
+
+#### HIGH PRIORITY FIXES (Eliminated False Positives/Negatives)
+
+1. **Control 5.1.5.1 - User Consent Validation (L2)**: Completely rewrote validation logic to properly detect user consent state. Now checks if `PermissionGrantPoliciesAssigned` array is empty (consent disabled - secure) or contains ANY policy starting with "ManagePermissionGrantsForSelf" (consent enabled - fail). Previous implementation only checked for legacy policy and missed custom consent policies. **Risk**: False negatives - could miss enabled consent via non-legacy policies.
+
+2. **Control 5.2.2.1 - Admin MFA Role Coverage (L1)**: Enhanced to verify comprehensive administrative role protection. Now validates policy targets either "All directory roles" OR includes all 9 critical admin role GUIDs (Global Admin, Security Admin, Application Admin, Cloud Application Admin, Billing Admin, Helpdesk Admin, Password Admin, Privileged Authentication Admin, Privileged Role Admin). Previous implementation only checked if ANY roles were included, allowing partial coverage to pass. Provides detailed failure messages showing missing role counts. **Risk**: False positives - policy with single admin role would pass.
+
+3. **Control 5.1.6.3 - Guest Inviter Restriction (L2)**: Now accepts both "adminsAndGuestInviters" (CIS baseline) AND "adminsOnly" (more restrictive) as compliant. Previous implementation failed for "adminsOnly" despite being more secure than requirement. Enhanced pass messages distinguish between the two security levels. **Risk**: False negatives - failing more secure configurations.
+
+#### MEDIUM PRIORITY ENHANCEMENTS (Improved Accuracy & Details)
+
+4. **Control 2.1.14 - Anti-spam Allowed Domains (L1)**: Enhanced to provide detailed breakdown of allowed domains and senders across all policies. Now reports total counts (e.g., "3 allowed domains, 5 allowed senders across 2 policies") with per-policy details. Maintains CIS requirement of zero tolerance while acknowledging legitimate business needs in messaging. Helps organizations make informed decisions about security vs. business requirements.
+
+5. **Control 6.1.2 - Mailbox Audit Actions (L1)**: Increased sample size from 5 to 50 mailboxes for statistically significant validation in large tenants. Added compliance rate percentage and enhanced failure messages. Previous 5-mailbox sample was insufficient for tenants with 1000+ mailboxes. New implementation provides ~5% sample rate with detailed compliance metrics.
+
+6. **Control 5.2.2.2 - MFA for All Users Excessive Exclusions (L1)**: Implemented threshold-based validation with 5-exclusion limit (emergency accounts + service accounts + break-glass group). Policies now FAIL when exceeding threshold instead of just warning. Provides tiered pass messages: "no exclusions (ideal)", "minimal exclusions (acceptable)", or "excessive exclusions (fail)". Helps identify security gaps from over-exclusion while allowing reasonable exceptions.
+
+### Impact Summary
+- **Eliminated**: 3 critical false positive/negative risks
+- **Enhanced**: 3 control validations with better accuracy and detail
+- **Improved**: Error messages with actionable remediation steps
+- **Coverage**: More robust validation for large enterprise tenants
+
+## [2.4.1] - Previous Version
 
 ### Bug Fixes - User-Reported Issues
 

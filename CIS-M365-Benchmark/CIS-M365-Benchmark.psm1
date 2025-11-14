@@ -9,7 +9,7 @@
     Provides cmdlets for running compliance checks and generating reports with zero false positives.
 
 .NOTES
-    Version: 2.4.1
+    Version: 2.4.2
     Author: Mohammed Siddiqui
     Copyright: (c) 2025 Mohammed Siddiqui. MIT License.
 #>

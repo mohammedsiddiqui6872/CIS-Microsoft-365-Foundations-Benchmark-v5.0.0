@@ -12,7 +12,7 @@
 RootModule = 'CIS-M365-Benchmark.psm1'
 
 # Version number of this module.
-ModuleVersion = '2.4.1'
+ModuleVersion = '2.4.2'
 
 # Supported PSEditions
 CompatiblePSEditions = @('Desktop', 'Core')
@@ -122,6 +122,22 @@ PrivateData = @{
 
         # ReleaseNotes of this module
         ReleaseNotes = @'
+## v2.4.2 - Comprehensive False Positive Fixes
+
+Fixed SIX controls based on comprehensive validation review:
+
+HIGH PRIORITY (Eliminated False Positives/Negatives):
+- 5.1.5.1: User consent validation completely rewritten - now detects all consent-enabling policies
+- 5.2.2.1: Admin MFA validates all 9 critical admin roles OR "All directory roles"
+- 5.1.6.3: Guest inviter now accepts both "adminsAndGuestInviters" and "adminsOnly"
+
+MEDIUM PRIORITY (Enhanced Accuracy):
+- 2.1.14: Anti-spam provides detailed breakdown of allowed domains/senders
+- 6.1.2: Mailbox audit sample increased from 5 to 50 with compliance rate reporting
+- 5.2.2.2: MFA for all users now FAILS with excessive exclusions (>5)
+
+Impact: Eliminated 3 critical false positive/negative risks, enhanced 3 validations with better accuracy for large tenants.
+
 ## v2.4.1 - Bug Fixes for User-Reported Issues
 
 Fixed FOUR controls based on user feedback:

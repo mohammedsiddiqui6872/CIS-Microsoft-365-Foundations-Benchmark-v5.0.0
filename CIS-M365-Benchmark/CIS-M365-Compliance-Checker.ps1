@@ -728,22 +728,37 @@ function Test-M365Defender {
     try {
         Write-Log "Checking 2.1.14 - Anti-spam allowed domains" -Level Info
         $contentFilters = Get-HostedContentFilterPolicy
-        $policiesWithAllowedDomains = @()
+        $policiesWithAllowedItems = @()
+        $totalAllowedDomains = 0
+        $totalAllowedSenders = 0
 
         foreach ($policy in $contentFilters) {
-            if ($policy.AllowedSenderDomains.Count -gt 0 -or $policy.AllowedSenders.Count -gt 0) {
-                $policiesWithAllowedDomains += $policy.Name
+            $domainCount = if ($policy.AllowedSenderDomains) { $policy.AllowedSenderDomains.Count } else { 0 }
+            $senderCount = if ($policy.AllowedSenders) { $policy.AllowedSenders.Count } else { 0 }
+
+            if ($domainCount -gt 0 -or $senderCount -gt 0) {
+                $totalAllowedDomains += $domainCount
+                $totalAllowedSenders += $senderCount
+
+                $policyInfo = "$($policy.Name): $domainCount domain(s), $senderCount sender(s)"
+                $policiesWithAllowedItems += $policyInfo
             }
         }
 
-        if ($policiesWithAllowedDomains.Count -eq 0) {
+        if ($policiesWithAllowedItems.Count -eq 0) {
             Add-Result -ControlNumber "2.1.14" -ControlTitle "Ensure inbound anti-spam policies do not contain allowed domains" `
-                       -ProfileLevel "L1" -Result "Pass" -Details "No allowed domains/senders in anti-spam policies"
+                       -ProfileLevel "L1" -Result "Pass" -Details "No allowed domains/senders configured in anti-spam policies"
         }
         else {
+            # CIS Benchmark requires zero allowed domains/senders for maximum security
+            # However, some organizations may have legitimate business needs for trusted partners
+            $failDetails = "Found $totalAllowedDomains allowed domain(s) and $totalAllowedSenders allowed sender(s) across $($policiesWithAllowedItems.Count) policy/policies. " +
+                          "Details: $($policiesWithAllowedItems -join '; '). " +
+                          "Note: CIS recommends zero allowed domains/senders. Review each entry to ensure it's required for business operations."
+
             Add-Result -ControlNumber "2.1.14" -ControlTitle "Ensure inbound anti-spam policies do not contain allowed domains" `
-                       -ProfileLevel "L1" -Result "Fail" -Details "Policies with allowed domains: $($policiesWithAllowedDomains -join ', ')" `
-                       -Remediation "Remove allowed domains/senders from anti-spam policies"
+                       -ProfileLevel "L1" -Result "Fail" -Details $failDetails `
+                       -Remediation "Review and remove unnecessary allowed domains/senders from anti-spam policies. Only keep entries essential for business operations."
         }
     }
     catch {
@@ -1084,14 +1099,38 @@ function Test-EntraID {
         Write-Log "Checking 5.1.5.1 - User consent disabled" -Level Info
         $authPolicy = Get-MgPolicyAuthorizationPolicy
 
-        if ($authPolicy.DefaultUserRolePermissions.PermissionGrantPoliciesAssigned -contains "ManagePermissionGrantsForSelf.microsoft-user-default-legacy") {
+        # Get the permission grant policies assigned to default user role
+        $consentPolicies = $authPolicy.DefaultUserRolePermissions.PermissionGrantPoliciesAssigned
+
+        # Check if user consent is enabled
+        # Empty array = consent disabled (secure)
+        # Contains legacy policy or other consent-enabling policies = consent enabled (fail)
+        # Policies that enable user consent include:
+        # - ManagePermissionGrantsForSelf.microsoft-user-default-legacy
+        # - ManagePermissionGrantsForSelf.microsoft-user-default-low
+        # - Any custom policy starting with "ManagePermissionGrantsForSelf"
+
+        $consentEnabled = $false
+        $enabledPolicies = @()
+
+        if ($consentPolicies -and $consentPolicies.Count -gt 0) {
+            foreach ($policy in $consentPolicies) {
+                if ($policy -like "ManagePermissionGrantsForSelf*") {
+                    $consentEnabled = $true
+                    $enabledPolicies += $policy
+                }
+            }
+        }
+
+        if ($consentEnabled) {
             Add-Result -ControlNumber "5.1.5.1" -ControlTitle "Ensure user consent to apps accessing company data on their behalf is not allowed" `
-                       -ProfileLevel "L2" -Result "Fail" -Details "User consent is allowed" `
-                       -Remediation "Disable user consent for applications"
+                       -ProfileLevel "L2" -Result "Fail" -Details "User consent is allowed via: $($enabledPolicies -join ', ')" `
+                       -Remediation "Remove user consent policies: Update-MgPolicyAuthorizationPolicy -DefaultUserRolePermissions @{PermissionGrantPoliciesAssigned=@()}"
         }
         else {
+            $details = if ($consentPolicies.Count -eq 0) { "User consent disabled (no policies assigned)" } else { "User consent disabled (no consent-enabling policies found)" }
             Add-Result -ControlNumber "5.1.5.1" -ControlTitle "Ensure user consent to apps accessing company data on their behalf is not allowed" `
-                       -ProfileLevel "L2" -Result "Pass" -Details "User consent is disabled"
+                       -ProfileLevel "L2" -Result "Pass" -Details $details
         }
     }
     catch {
@@ -1135,14 +1174,29 @@ function Test-EntraID {
         Write-Log "Checking 5.1.6.3 - Guest inviter role restriction" -Level Info
         $authPolicy = Get-MgPolicyAuthorizationPolicy
 
-        if ($authPolicy.AllowInvitesFrom -eq "adminsAndGuestInviters") {
+        # Acceptable values (in order from most restrictive to least restrictive that still passes):
+        # - adminsOnly: Only Global Admins can invite (most restrictive - compliant)
+        # - adminsAndGuestInviters: Admins and Guest Inviter role can invite (compliant per CIS)
+        # NOT acceptable:
+        # - adminsGuestInvitersAndAllMembers: All members can invite (too permissive)
+        # - everyone: Anyone including guests can invite (too permissive)
+
+        if ($authPolicy.AllowInvitesFrom -eq "adminsAndGuestInviters" -or
+            $authPolicy.AllowInvitesFrom -eq "adminsOnly") {
+
+            $restrictionLevel = if ($authPolicy.AllowInvitesFrom -eq "adminsOnly") {
+                "admins only (most restrictive)"
+            } else {
+                "admins and guest inviters"
+            }
+
             Add-Result -ControlNumber "5.1.6.3" -ControlTitle "Ensure guest user invitations are limited to the Guest Inviter role" `
-                       -ProfileLevel "L2" -Result "Pass" -Details "Guest invitations restricted to admins and guest inviters"
+                       -ProfileLevel "L2" -Result "Pass" -Details "Guest invitations restricted to $restrictionLevel"
         }
         else {
             Add-Result -ControlNumber "5.1.6.3" -ControlTitle "Ensure guest user invitations are limited to the Guest Inviter role" `
-                       -ProfileLevel "L2" -Result "Fail" -Details "Guest invitations not properly restricted: $($authPolicy.AllowInvitesFrom)" `
-                       -Remediation "Restrict guest invitations to admins and guest inviters only"
+                       -ProfileLevel "L2" -Result "Fail" -Details "Guest invitations too permissive: $($authPolicy.AllowInvitesFrom)" `
+                       -Remediation "Set-MgPolicyAuthorizationPolicy -AllowInvitesFrom adminsAndGuestInviters (or adminsOnly for more restrictive)"
         }
     }
     catch {
@@ -1164,26 +1218,64 @@ function Test-EntraID {
         $caPolicies = Get-MgIdentityConditionalAccessPolicy
         $adminMfaPolicy = $null
 
+        # Define critical administrative role GUIDs per CIS Benchmark
+        # These are the minimum roles that MUST be protected with MFA
+        $criticalAdminRoles = @(
+            "62e90394-69f5-4237-9190-012177145e10",  # Global Administrator
+            "194ae4cb-b126-40b2-bd5b-6091b380977d",  # Security Administrator
+            "9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3",  # Application Administrator
+            "158c047a-c907-4556-b7ef-446551a6b5f7",  # Cloud Application Administrator
+            "b0f54661-2d74-4c50-afa3-1ec803f12efe",  # Billing Administrator
+            "729827e3-9c14-49f7-bb1b-9608f156bbb8",  # Helpdesk Administrator
+            "966707d0-3269-4727-9be2-8c3a10f19b9d",  # Password Administrator
+            "7be44c8a-adaf-4e2a-84d6-ab2649e08a13",  # Privileged Authentication Administrator
+            "e8611ab8-c189-46e8-94e1-60213ab1f814"   # Privileged Role Administrator
+        )
+
         foreach ($policy in $caPolicies) {
-            # Check for enabled policies (not report-only) requiring MFA for admin roles
+            # Check for enabled policies (not report-only) requiring MFA
             if ($policy.State -eq "enabled" -and
                 $policy.Conditions.Users.IncludeRoles -and
                 $policy.GrantControls.BuiltInControls -contains "mfa") {
-                $adminMfaPolicy = $policy
-                break
+
+                # Check if policy targets ALL directory roles (best practice)
+                if ($policy.Conditions.Users.IncludeRoles -contains "All") {
+                    $adminMfaPolicy = $policy
+                    break
+                }
+
+                # Otherwise, verify that all critical admin roles are included
+                $includedRoles = $policy.Conditions.Users.IncludeRoles
+                $missingRoles = $criticalAdminRoles | Where-Object { $_ -notin $includedRoles }
+
+                if ($missingRoles.Count -eq 0) {
+                    # All critical roles are covered
+                    $adminMfaPolicy = $policy
+                    break
+                }
+                # If some but not all critical roles are covered, continue checking other policies
             }
         }
 
         if ($adminMfaPolicy) {
-            # Warn if policy has exclusions but still pass
+            # Determine coverage type
+            $coverageType = if ($adminMfaPolicy.Conditions.Users.IncludeRoles -contains "All") {
+                "all directory roles"
+            } else {
+                "$($adminMfaPolicy.Conditions.Users.IncludeRoles.Count) administrative roles"
+            }
+
+            # Warn if policy has exclusions
             $exclusionWarning = ""
             if ($adminMfaPolicy.Conditions.Users.ExcludeUsers -or $adminMfaPolicy.Conditions.Users.ExcludeRoles) {
-                $exclusionCount = ($adminMfaPolicy.Conditions.Users.ExcludeUsers.Count + $adminMfaPolicy.Conditions.Users.ExcludeRoles.Count)
-                $exclusionWarning = " (Warning: $exclusionCount exclusions)"
+                $excludedRoleCount = if ($adminMfaPolicy.Conditions.Users.ExcludeRoles) { $adminMfaPolicy.Conditions.Users.ExcludeRoles.Count } else { 0 }
+                $excludedUserCount = if ($adminMfaPolicy.Conditions.Users.ExcludeUsers) { $adminMfaPolicy.Conditions.Users.ExcludeUsers.Count } else { 0 }
+                $totalExclusions = $excludedRoleCount + $excludedUserCount
+                $exclusionWarning = " (Warning: $totalExclusions exclusions - $excludedUserCount users, $excludedRoleCount roles)"
             }
 
             Add-Result -ControlNumber "5.2.2.1" -ControlTitle "Ensure multifactor authentication is enabled for all users in administrative roles" `
-                       -ProfileLevel "L1" -Result "Pass" -Details "CA policy requiring MFA for admin roles exists$exclusionWarning"
+                       -ProfileLevel "L1" -Result "Pass" -Details "CA policy requiring MFA for $coverageType$exclusionWarning"
         }
         else {
             # Check if there's a report-only policy
@@ -1199,9 +1291,26 @@ function Test-EntraID {
                            -Remediation "Change policy state from 'Report-only' to 'On' to enforce MFA for admin roles"
             }
             else {
-                Add-Result -ControlNumber "5.2.2.1" -ControlTitle "Ensure multifactor authentication is enabled for all users in administrative roles" `
-                           -ProfileLevel "L1" -Result "Fail" -Details "No CA policy requiring MFA for admin roles" `
-                           -Remediation "Create CA policy requiring MFA for all administrative roles"
+                # Check if partial coverage exists (some but not all critical roles)
+                $partialPolicy = $caPolicies | Where-Object {
+                    $_.State -eq "enabled" -and
+                    $_.Conditions.Users.IncludeRoles -and
+                    $_.GrantControls.BuiltInControls -contains "mfa"
+                } | Select-Object -First 1
+
+                if ($partialPolicy) {
+                    $coveredRoles = $criticalAdminRoles | Where-Object { $_ -in $partialPolicy.Conditions.Users.IncludeRoles }
+                    $missingRoles = $criticalAdminRoles | Where-Object { $_ -notin $partialPolicy.Conditions.Users.IncludeRoles }
+
+                    Add-Result -ControlNumber "5.2.2.1" -ControlTitle "Ensure multifactor authentication is enabled for all users in administrative roles" `
+                               -ProfileLevel "L1" -Result "Fail" -Details "CA policy covers only $($coveredRoles.Count) of $($criticalAdminRoles.Count) critical admin roles. Missing: $($missingRoles.Count) roles" `
+                               -Remediation "Update CA policy to target 'All directory roles' or include all critical administrative roles"
+                }
+                else {
+                    Add-Result -ControlNumber "5.2.2.1" -ControlTitle "Ensure multifactor authentication is enabled for all users in administrative roles" `
+                               -ProfileLevel "L1" -Result "Fail" -Details "No CA policy requiring MFA for admin roles" `
+                               -Remediation "Create CA policy requiring MFA for all administrative roles (target 'All directory roles')"
+                }
             }
         }
     }
@@ -1226,14 +1335,30 @@ function Test-EntraID {
         }
 
         if ($allUserMfaPolicy) {
-            $exclusionWarning = ""
-            if ($allUserMfaPolicy.Conditions.Users.ExcludeUsers -or $allUserMfaPolicy.Conditions.Users.ExcludeGroups) {
-                $exclusionCount = ($allUserMfaPolicy.Conditions.Users.ExcludeUsers.Count + $allUserMfaPolicy.Conditions.Users.ExcludeGroups.Count)
-                $exclusionWarning = " (Warning: $exclusionCount exclusions)"
-            }
+            # Check for excessive exclusions
+            # CIS allows for minimal exclusions (emergency access accounts, service accounts)
+            # But excessive exclusions (>5 total) indicate potential security gaps
+            $excludedUserCount = if ($allUserMfaPolicy.Conditions.Users.ExcludeUsers) { $allUserMfaPolicy.Conditions.Users.ExcludeUsers.Count } else { 0 }
+            $excludedGroupCount = if ($allUserMfaPolicy.Conditions.Users.ExcludeGroups) { $allUserMfaPolicy.Conditions.Users.ExcludeGroups.Count } else { 0 }
+            $totalExclusions = $excludedUserCount + $excludedGroupCount
 
-            Add-Result -ControlNumber "5.2.2.2" -ControlTitle "Ensure multifactor authentication is enabled for all users" `
-                       -ProfileLevel "L1" -Result "Pass" -Details "CA policy requiring MFA for all users exists$exclusionWarning"
+            # Threshold for acceptable exclusions: 5 (typically 1-2 emergency accounts + 1-2 service accounts + 1 break-glass group)
+            $maxAcceptableExclusions = 5
+
+            if ($totalExclusions -eq 0) {
+                Add-Result -ControlNumber "5.2.2.2" -ControlTitle "Ensure multifactor authentication is enabled for all users" `
+                           -ProfileLevel "L1" -Result "Pass" -Details "CA policy requiring MFA for all users with no exclusions (ideal configuration)"
+            }
+            elseif ($totalExclusions -le $maxAcceptableExclusions) {
+                Add-Result -ControlNumber "5.2.2.2" -ControlTitle "Ensure multifactor authentication is enabled for all users" `
+                           -ProfileLevel "L1" -Result "Pass" -Details "CA policy requiring MFA for all users exists with $totalExclusions exclusion(s) ($excludedUserCount user(s), $excludedGroupCount group(s)). Review to ensure only emergency/service accounts are excluded."
+            }
+            else {
+                # Excessive exclusions - FAIL
+                Add-Result -ControlNumber "5.2.2.2" -ControlTitle "Ensure multifactor authentication is enabled for all users" `
+                           -ProfileLevel "L1" -Result "Fail" -Details "CA policy has excessive exclusions: $totalExclusions total ($excludedUserCount user(s), $excludedGroupCount group(s)). Maximum recommended: $maxAcceptableExclusions. Excessive exclusions create security gaps." `
+                           -Remediation "Review and minimize exclusions to only essential emergency access and service accounts. Consider using excluded groups instead of individual users for better management."
+            }
         }
         else {
             $reportOnlyPolicy = $caPolicies | Where-Object {
@@ -1945,8 +2070,12 @@ function Test-ExchangeOnline {
         $requiredDelegateActions = @("Create", "HardDelete", "Move", "MoveToDeletedItems", "SendAs", "SendOnBehalf", "SoftDelete", "Update")
         $requiredAdminActions = @("Copy", "Create", "HardDelete", "Move", "MoveToDeletedItems", "SendAs", "SendOnBehalf", "SoftDelete", "Update")
 
-        # Sample a few mailboxes to verify audit actions (limit for performance)
-        $mailboxes = Get-Mailbox -ResultSize 5 | Select-Object UserPrincipalName, AuditEnabled, AuditOwner, AuditDelegate, AuditAdmin
+        # Sample mailboxes to verify audit actions
+        # Increased sample size from 5 to 50 for better coverage in large tenants
+        # Note: For tenants with 1000+ mailboxes, this provides ~5% sample rate
+        # For very large tenants (10,000+), consider periodic full audits via separate script
+        $sampleSize = 50
+        $mailboxes = Get-Mailbox -ResultSize $sampleSize | Select-Object UserPrincipalName, AuditEnabled, AuditOwner, AuditDelegate, AuditAdmin
 
         $compliantMailboxes = 0
         $nonCompliantDetails = @()
@@ -1971,7 +2100,7 @@ function Test-ExchangeOnline {
 
         if ($orgConfig.AuditDisabled -eq $false -and $compliantMailboxes -eq $mailboxes.Count) {
             Add-Result -ControlNumber "6.1.2" -ControlTitle "Ensure mailbox audit actions are configured" `
-                       -ProfileLevel "L1" -Result "Pass" -Details "Mailbox auditing enabled org-wide with proper default actions (sampled $($mailboxes.Count) mailboxes)"
+                       -ProfileLevel "L1" -Result "Pass" -Details "Mailbox auditing enabled org-wide with proper default actions (sampled $($mailboxes.Count) of $sampleSize requested mailboxes)"
         }
         elseif ($orgConfig.AuditDisabled -eq $true) {
             Add-Result -ControlNumber "6.1.2" -ControlTitle "Ensure mailbox audit actions are configured" `
@@ -1979,9 +2108,13 @@ function Test-ExchangeOnline {
                        -Remediation "Set-OrganizationConfig -AuditDisabled `$false"
         }
         else {
-            $detailsStr = $nonCompliantDetails[0..2] -join "; "
+            # Show up to 5 examples of non-compliant mailboxes
+            $exampleCount = [Math]::Min(5, $nonCompliantDetails.Count)
+            $detailsStr = $nonCompliantDetails[0..($exampleCount-1)] -join "; "
+            $complianceRate = [Math]::Round(($compliantMailboxes / $mailboxes.Count) * 100, 1)
+
             Add-Result -ControlNumber "6.1.2" -ControlTitle "Ensure mailbox audit actions are configured" `
-                       -ProfileLevel "L1" -Result "Fail" -Details "$($nonCompliantDetails.Count) mailboxes missing required audit actions. Examples: $detailsStr" `
+                       -ProfileLevel "L1" -Result "Fail" -Details "$($nonCompliantDetails.Count) of $($mailboxes.Count) sampled mailboxes ($complianceRate% compliant) missing required audit actions. Examples: $detailsStr" `
                        -Remediation "Ensure default mailbox auditing is enabled and not overridden. Check: Get-Mailbox -ResultSize Unlimited | Where-Object {`$_.AuditEnabled -eq `$false}"
         }
     }
