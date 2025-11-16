@@ -108,16 +108,22 @@ $html = @"
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #f1f5f9; line-height: 1.6; }
-        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #f1f5f9; line-height: 1.6; padding-top: 0; }
+        .container { max-width: 1400px; margin: 0 auto; }
 
-        /* Header */
+        /* Sticky Header */
         .header {
-            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
-            padding: 30px;
-            border-radius: 10px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            background: #18181b;
+            border-bottom: 3px solid #60a5fa;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+        .header-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 12px 40px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -129,7 +135,12 @@ $html = @"
             margin-top: 4px;
             color: white;
         }
-        .header-right { text-align: right; color: #dbeafe; }
+        .header-right {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            color: white;
+        }
 
         /* Collapsible header details */
         .tenant-info {
@@ -151,20 +162,39 @@ $html = @"
         .expand-icon.expanded {
             transform: rotate(180deg);
         }
-        .header-details {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease;
-            margin-top: 0;
+        .header-details-box {
+            display: none;
+            background: #18181b;
+            border: 1px solid #27272a;
+            border-radius: 8px;
+            padding: 15px 20px;
+            margin: 15px 20px 0 20px;
+            animation: slideDown 0.3s ease;
         }
-        .header-details.expanded {
-            max-height: 200px;
-            margin-top: 10px;
+        .header-details-box.expanded {
+            display: block;
+        }
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .details-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            font-size: 0.85em;
+            color: white;
         }
 
         /* Content */
         .content { padding: 10px 40px 20px 40px; }
-        h2 { color: #60a5fa; margin-top: 30px; margin-bottom: 15px; }
+        h2 { color: white; margin-top: 30px; margin-bottom: 15px; }
         h2:first-child { margin-top: 0; margin-bottom: 10px; }
 
         .summary { background: #18181b; padding: 12px 15px; border-radius: 8px; margin-bottom: 25px; border: 1px solid #27272a; }
@@ -237,7 +267,7 @@ $html = @"
         }
 
         table { width: 100%; border-collapse: collapse; background: #18181b; border: 1px solid #27272a; margin-top: 20px; }
-        th { background-color: #1e3a8a; color: white; padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #60a5fa; }
+        th { background-color: #18181b; color: white; padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #60a5fa; }
         td { padding: 12px; border-bottom: 1px solid #27272a; }
         tr:hover { background-color: #27272a; }
         tr.hidden { display: none; }
@@ -250,7 +280,7 @@ $html = @"
 
         .footer {
             margin-top: 40px;
-            padding: 20px;
+            padding: 10px 40px;
             text-align: center;
             background: #18181b;
             border-radius: 8px;
@@ -260,26 +290,29 @@ $html = @"
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <div class="header">
+    <!-- Header -->
+    <div class="header">
+        <div class="header-container">
             <div class="header-left">
                 <h1>🔒 CIS Microsoft 365 Compliance Report</h1>
-                <div class="tenant-info" onclick="toggleHeaderDetails()">
-                    <span class="subtitle">TEST REPORT - Microsoft 365 Tenant</span>
-                    <span class="expand-icon" id="expandIcon">▼</span>
-                </div>
-                <div class="header-details" id="headerDetails">
-                    <div style="font-size: 0.75em; margin-top: 4px; opacity: 0.8;">CIS Benchmark v5.0.0</div>
-                    <div style="font-size: 0.75em; margin-top: 4px; opacity: 0.8;">Generated: $reportDate</div>
-                    <div style="font-size: 0.75em; margin-top: 4px; opacity: 0.8;">Run by: $currentUser</div>
-                    <div style="font-size: 0.75em; margin-top: 4px; opacity: 0.8;">Total Controls: $totalControls (Test Data)</div>
-                    <div style="font-size: 0.75em; margin-top: 4px; opacity: 0.8;">Compliance Rate: $passRate%</div>
-                </div>
             </div>
             <div class="header-right">
-                <div style="font-size: 1.2em; font-weight: 600;">$passRate%</div>
-                <div style="opacity: 0.8;">Compliant</div>
+                <div class="tenant-info" onclick="toggleHeaderDetails()">
+                    <span class="subtitle">TEST REPORT - Microsoft 365 Tenant</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Collapsible Details Box -->
+        <div class="header-details-box" id="headerDetailsBox">
+            <div class="details-grid">
+                <div><strong>Benchmark Version:</strong> CIS v5.0.0</div>
+                <div><strong>Generated:</strong> $reportDate</div>
+                <div><strong>Run by:</strong> $currentUser</div>
+                <div><strong>Total Controls:</strong> $totalControls (Test Data)</div>
+                <div><strong>Compliance Rate:</strong> $passRate%</div>
             </div>
         </div>
 
@@ -372,9 +405,9 @@ $html += @"
         let activeFilter = null;
 
         function toggleHeaderDetails() {
-            const details = document.getElementById('headerDetails');
+            const detailsBox = document.getElementById('headerDetailsBox');
             const icon = document.getElementById('expandIcon');
-            details.classList.toggle('expanded');
+            detailsBox.classList.toggle('expanded');
             icon.classList.toggle('expanded');
         }
 

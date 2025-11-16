@@ -3225,17 +3225,25 @@ function Export-HtmlReport {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0a0a0c; color: #e4e4e7; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0a0a0c; color: #e4e4e7; padding-top: 0; }
         .container { max-width: 1400px; margin: 0 auto; }
 
-        /* Header */
+        /* Sticky Header */
         .header {
-            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
-            padding: 20px 40px;
+            background: #18181b;
+            border-bottom: 3px solid #60a5fa;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+        .header-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 12px 40px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 3px solid #60a5fa;
         }
         .header h1 {
             font-size: 1.8em;
@@ -3251,12 +3259,10 @@ function Export-HtmlReport {
             color: white;
         }
         .header-right {
-            text-align: right;
-            font-size: 0.85em;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
             color: white;
-        }
-        .header-right > div {
-            margin-bottom: 2px;
         }
 
         /* Collapsible header details */
@@ -3279,20 +3285,39 @@ function Export-HtmlReport {
         .expand-icon.expanded {
             transform: rotate(180deg);
         }
-        .header-details {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease;
-            margin-top: 0;
+        .header-details-box {
+            display: none;
+            background: #18181b;
+            border: 1px solid #27272a;
+            border-radius: 8px;
+            padding: 15px 20px;
+            margin: 15px 20px 0 20px;
+            animation: slideDown 0.3s ease;
         }
-        .header-details.expanded {
-            max-height: 200px;
-            margin-top: 10px;
+        .header-details-box.expanded {
+            display: block;
+        }
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .details-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            font-size: 0.85em;
+            color: white;
         }
 
         /* Content */
         .content { padding: 10px 40px 20px 40px; }
-        h2 { color: #60a5fa; margin-top: 30px; margin-bottom: 15px; }
+        h2 { color: white; margin-top: 30px; margin-bottom: 15px; }
         h2:first-child { margin-top: 0; margin-bottom: 10px; }
 
         .summary { background: #18181b; padding: 12px 15px; border-radius: 8px; margin-bottom: 25px; border: 1px solid #27272a; }
@@ -3365,7 +3390,7 @@ function Export-HtmlReport {
         }
 
         table { width: 100%; border-collapse: collapse; background: #18181b; border: 1px solid #27272a; margin-top: 20px; }
-        th { background-color: #1e3a8a; color: white; padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #60a5fa; }
+        th { background-color: #18181b; color: white; padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #60a5fa; }
         td { padding: 12px; border-bottom: 1px solid #27272a; }
         tr:hover { background-color: #27272a; }
         .status-pass { color: #4ade80; font-weight: bold; }
@@ -3433,7 +3458,7 @@ function Export-HtmlReport {
         .footer {
             background: #18181b;
             color: #a1a1aa;
-            padding: 15px 40px;
+            padding: 10px 40px;
             text-align: center;
             border-top: 1px solid #27272a;
             margin-top: 40px;
@@ -3448,26 +3473,29 @@ function Export-HtmlReport {
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <div class="header">
+    <!-- Header -->
+    <div class="header">
+        <div class="header-container">
             <div class="header-left">
                 <h1>CIS MICROSOFT 365 FOUNDATIONS BENCHMARK v5.0.0</h1>
-                <div class="tenant-info" onclick="toggleHeaderDetails()">
-                    <span class="subtitle">Microsoft 365 Tenant</span>
-                    <span class="expand-icon" id="expandIcon">▼</span>
-                </div>
-                <div class="header-details" id="headerDetails">
-                    <div class="subtitle" style="font-size: 0.75em; margin-top: 4px; opacity: 0.8;">Tenant ID: $currentTenantId</div>
-                    <div style="font-size: 0.75em; margin-top: 4px; opacity: 0.8;">Generated: $reportDate</div>
-                    <div style="font-size: 0.75em; margin-top: 4px; opacity: 0.8;">Run by: $currentUserAccount</div>
-                    <div style="font-size: 0.75em; margin-top: 4px; opacity: 0.8;">Total Controls: $Script:TotalControls</div>
-                    <div style="font-size: 0.75em; margin-top: 4px; opacity: 0.8;">Compliance Rate: $passRate%</div>
-                </div>
             </div>
             <div class="header-right">
-                <div style="font-size: 1.2em; font-weight: 600;">$passRate%</div>
-                <div style="opacity: 0.8;">Compliant</div>
+                <div class="tenant-info" onclick="toggleHeaderDetails()">
+                    <span class="subtitle">Microsoft 365 Tenant</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Collapsible Details Box -->
+        <div class="header-details-box" id="headerDetailsBox">
+            <div class="details-grid">
+                <div><strong>Tenant ID:</strong> $currentTenantId</div>
+                <div><strong>Generated:</strong> $reportDate</div>
+                <div><strong>Run by:</strong> $currentUserAccount</div>
+                <div><strong>Total Controls:</strong> $Script:TotalControls</div>
+                <div><strong>Compliance Rate:</strong> $passRate%</div>
             </div>
         </div>
 
@@ -3578,9 +3606,9 @@ function Export-HtmlReport {
         let activeFilter = null;
 
         function toggleHeaderDetails() {
-            const details = document.getElementById('headerDetails');
+            const detailsBox = document.getElementById('headerDetailsBox');
             const icon = document.getElementById('expandIcon');
-            details.classList.toggle('expanded');
+            detailsBox.classList.toggle('expanded');
             icon.classList.toggle('expanded');
         }
 
