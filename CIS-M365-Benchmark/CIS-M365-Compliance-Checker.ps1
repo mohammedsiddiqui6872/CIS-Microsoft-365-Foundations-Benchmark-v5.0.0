@@ -3259,17 +3259,43 @@ function Export-HtmlReport {
             margin-bottom: 2px;
         }
 
+        /* Collapsible header details */
+        .tenant-info {
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 8px;
+            border-radius: 5px;
+            transition: background-color 0.3s ease;
+        }
+        .tenant-info:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .expand-icon {
+            font-size: 0.8em;
+            transition: transform 0.3s ease;
+        }
+        .expand-icon.expanded {
+            transform: rotate(180deg);
+        }
+        .header-details {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            margin-top: 0;
+        }
+        .header-details.expanded {
+            max-height: 200px;
+            margin-top: 10px;
+        }
+
         /* Content */
         .content { padding: 10px 40px 20px 40px; }
         h2 { color: #60a5fa; margin-top: 30px; margin-bottom: 15px; }
         h2:first-child { margin-top: 0; margin-bottom: 10px; }
 
         .summary { background: #18181b; padding: 12px 15px; border-radius: 8px; margin-bottom: 25px; border: 1px solid #27272a; }
-
-        @keyframes borderGlow {
-            0%, 100% { box-shadow: 0 0 5px rgba(255, 255, 255, 0.5), 0 0 10px rgba(255, 255, 255, 0.3); }
-            50% { box-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 0 0 20px rgba(255, 255, 255, 0.5); }
-        }
 
         .summary-box {
             display: inline-block;
@@ -3280,16 +3306,14 @@ function Export-HtmlReport {
             transition: all 0.3s ease;
             background-color: #000000;
             border: 2px solid #ffffff;
-            animation: borderGlow 2s ease-in-out infinite;
         }
         .summary-box:hover {
             transform: translateY(-2px);
-            box-shadow: 0 0 15px rgba(255, 255, 255, 0.9), 0 0 25px rgba(255, 255, 255, 0.6);
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
         }
         .summary-box.active {
-            box-shadow: 0 0 20px rgba(96, 165, 250, 0.9), 0 0 30px rgba(96, 165, 250, 0.6);
+            box-shadow: 0 0 12px rgba(96, 165, 250, 0.8);
             border: 2px solid #60a5fa !important;
-            animation: none;
         }
         .pass { color: #4ade80; }
         .fail { color: #f87171; }
@@ -3429,14 +3453,21 @@ function Export-HtmlReport {
         <div class="header">
             <div class="header-left">
                 <h1>CIS MICROSOFT 365 FOUNDATIONS BENCHMARK v5.0.0</h1>
-                <div class="subtitle">Microsoft 365 Tenant</div>
-                <div class="subtitle" style="font-size: 0.75em; margin-top: 4px; opacity: 0.8;">Tenant ID: $currentTenantId</div>
+                <div class="tenant-info" onclick="toggleHeaderDetails()">
+                    <span class="subtitle">Microsoft 365 Tenant</span>
+                    <span class="expand-icon" id="expandIcon">▼</span>
+                </div>
+                <div class="header-details" id="headerDetails">
+                    <div class="subtitle" style="font-size: 0.75em; margin-top: 4px; opacity: 0.8;">Tenant ID: $currentTenantId</div>
+                    <div style="font-size: 0.75em; margin-top: 4px; opacity: 0.8;">Generated: $reportDate</div>
+                    <div style="font-size: 0.75em; margin-top: 4px; opacity: 0.8;">Run by: $currentUserAccount</div>
+                    <div style="font-size: 0.75em; margin-top: 4px; opacity: 0.8;">Total Controls: $Script:TotalControls</div>
+                    <div style="font-size: 0.75em; margin-top: 4px; opacity: 0.8;">Compliance Rate: $passRate%</div>
+                </div>
             </div>
             <div class="header-right">
-                <div>Generated: $reportDate</div>
-                <div>Run by: $currentUserAccount</div>
-                <div>Total Controls: $Script:TotalControls</div>
-                <div>Compliance Rate: $passRate%</div>
+                <div style="font-size: 1.2em; font-weight: 600;">$passRate%</div>
+                <div style="opacity: 0.8;">Compliant</div>
             </div>
         </div>
 
@@ -3472,14 +3503,14 @@ function Export-HtmlReport {
         </div>
     </div>
 
-    <h2>Detailed Results</h2>
-
     <!-- Search Box -->
     <div class="search-container">
         <input type="text" id="searchBox" placeholder="Search by control number, title, level (L1/L2), or status (Pass/Fail/Manual)..." onkeyup="searchTable()">
         <span class="search-icon">🔍</span>
         <span id="searchResults" class="search-results"></span>
     </div>
+
+    <h2>Detailed Results</h2>
 
     <table id="resultsTable">
         <thead>
@@ -3545,6 +3576,13 @@ function Export-HtmlReport {
 
     <script>
         let activeFilter = null;
+
+        function toggleHeaderDetails() {
+            const details = document.getElementById('headerDetails');
+            const icon = document.getElementById('expandIcon');
+            details.classList.toggle('expanded');
+            icon.classList.toggle('expanded');
+        }
 
         function filterResults(box) {
             const filterValue = box.getAttribute('data-filter');
