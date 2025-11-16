@@ -66,3 +66,6 @@ Remove-ClaudeAttribution.ps1
 
 # Temporary commit message files
 commit-msg-*.txt
+
+# Internal review and analysis files (local only)
+FALSE_POSITIVE_REVIEW.md
