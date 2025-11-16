@@ -2,6 +2,44 @@
 
 All notable changes to the CIS Microsoft 365 Foundations Benchmark Compliance Checker will be documented in this file.
 
+## [2.4.4] - 2025-01-17
+
+### ✨ New Features
+- **Real-time Search Box**: Added instant search functionality to HTML reports
+  - Search across control number, title, level (L1/L2), status, and details
+  - Live filtering as you type with result counter
+  - Clear search to restore all results
+  - Clears filter buttons when searching and vice versa
+
+- **L1/L2 Level Tracking**: Added dedicated score cards for profile levels
+  - New L1 Checks card showing passed/total L1 controls with compliance rate
+  - New L2 Checks card showing passed/total L2 controls with compliance rate
+  - Clickable cards to filter results by profile level
+  - Console output includes L1/L2 statistics breakdown
+
+- **Enhanced UI Design**: Modern, professional report styling
+  - Compact summary boxes with reduced height for better space efficiency
+  - Unified black background for all score cards
+  - Animated white glowing borders with continuous pulsing effect
+  - Color-coded text for easy status identification
+  - Improved hover effects with enhanced glow
+  - Active state shows blue glow when filtering
+
+### Technical Details
+- Added 8 new global counters: L1Total, L1Passed, L1Failed, L1Manual, L2Total, L2Passed, L2Failed, L2Manual
+- Updated Add-Result function to track L1/L2 statistics separately
+- Implemented searchTable() JavaScript function for real-time filtering
+- Added data-level attribute to table rows for level-based filtering
+- CSS animations using @keyframes for smooth border glow effect
+- Enhanced filterResults() function to support both status and level filtering
+
+### User Experience Improvements
+- Search box positioned prominently above Detailed Results table
+- Results counter displays "Found X results out of Y controls"
+- Search supports partial matching across all columns
+- Smooth transitions and professional animations throughout
+- Better visual hierarchy with compact, consistent design
+
 ## [2.4.3] - 2025-01-17
 
 ### 🐛 Bug Fixes

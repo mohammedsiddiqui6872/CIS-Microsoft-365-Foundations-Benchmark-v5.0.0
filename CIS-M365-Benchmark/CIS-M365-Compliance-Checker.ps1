@@ -60,6 +60,16 @@ $Script:ErrorControls = 0
 $Script:MsolConnected = $false
 $Script:RequestedProfileLevel = $ProfileLevel
 
+# Level-specific counters
+$Script:L1TotalControls = 0
+$Script:L1PassedControls = 0
+$Script:L1FailedControls = 0
+$Script:L1ManualControls = 0
+$Script:L2TotalControls = 0
+$Script:L2PassedControls = 0
+$Script:L2FailedControls = 0
+$Script:L2ManualControls = 0
+
 #region Helper Functions
 
 function Write-Log {
@@ -105,6 +115,24 @@ function Add-Result {
     }
 
     $Script:TotalControls++
+
+    # Track level-specific statistics
+    if ($ProfileLevel -eq 'L1') {
+        $Script:L1TotalControls++
+        switch($Result) {
+            'Pass' { $Script:L1PassedControls++ }
+            'Fail' { $Script:L1FailedControls++ }
+            'Manual' { $Script:L1ManualControls++ }
+        }
+    }
+    elseif ($ProfileLevel -eq 'L2') {
+        $Script:L2TotalControls++
+        switch($Result) {
+            'Pass' { $Script:L2PassedControls++ }
+            'Fail' { $Script:L2FailedControls++ }
+            'Manual' { $Script:L2ManualControls++ }
+        }
+    }
 
     switch($Result) {
         'Pass' { $Script:PassedControls++ }
@@ -3178,6 +3206,16 @@ function Export-HtmlReport {
         [math]::Round(($Script:PassedControls / ($Script:TotalControls - $Script:ManualControls)) * 100, 2)
     } else { 0 }
 
+    # Calculate L1 compliance rate
+    $l1PassRate = if ($Script:L1TotalControls -gt 0 -and ($Script:L1TotalControls - $Script:L1ManualControls) -gt 0) {
+        [math]::Round(($Script:L1PassedControls / ($Script:L1TotalControls - $Script:L1ManualControls)) * 100, 2)
+    } else { 0 }
+
+    # Calculate L2 compliance rate
+    $l2PassRate = if ($Script:L2TotalControls -gt 0 -and ($Script:L2TotalControls - $Script:L2ManualControls) -gt 0) {
+        [math]::Round(($Script:L2PassedControls / ($Script:L2TotalControls - $Script:L2ManualControls)) * 100, 2)
+    } else { 0 }
+
     $html = @"
 <!DOCTYPE html>
 <html>
@@ -3222,33 +3260,84 @@ function Export-HtmlReport {
         }
 
         /* Content */
-        .content { padding: 20px 40px; }
+        .content { padding: 10px 40px 20px 40px; }
         h2 { color: #60a5fa; margin-top: 30px; margin-bottom: 15px; }
 
-        .summary { background: #18181b; padding: 20px; border-radius: 8px; margin-bottom: 30px; border: 1px solid #27272a; }
+        .summary { background: #18181b; padding: 15px; border-radius: 8px; margin-bottom: 25px; border: 1px solid #27272a; }
+
+        @keyframes borderGlow {
+            0%, 100% { box-shadow: 0 0 5px rgba(255, 255, 255, 0.5), 0 0 10px rgba(255, 255, 255, 0.3); }
+            50% { box-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 0 0 20px rgba(255, 255, 255, 0.5); }
+        }
+
         .summary-box {
             display: inline-block;
-            margin: 10px 20px 10px 0;
-            padding: 15px 25px;
+            margin: 8px 15px 8px 0;
+            padding: 10px 20px;
             border-radius: 5px;
             cursor: pointer;
             transition: all 0.3s ease;
+            background-color: #000000;
+            border: 2px solid #ffffff;
+            animation: borderGlow 2s ease-in-out infinite;
         }
         .summary-box:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.9), 0 0 25px rgba(255, 255, 255, 0.6);
         }
         .summary-box.active {
-            box-shadow: 0 0 15px rgba(96, 165, 250, 0.4);
+            box-shadow: 0 0 20px rgba(96, 165, 250, 0.9), 0 0 30px rgba(96, 165, 250, 0.6);
             border: 2px solid #60a5fa !important;
+            animation: none;
         }
-        .pass { background-color: #14532d; color: #4ade80; border: 1px solid #166534; }
-        .fail { background-color: #450a0a; color: #f87171; border: 1px solid #7f1d1d; }
-        .manual { background-color: #422006; color: #fbbf24; border: 1px solid #78350f; }
-        .error { background-color: #450a0a; color: #f87171; border: 1px solid #7f1d1d; }
+        .pass { color: #4ade80; }
+        .fail { color: #f87171; }
+        .manual { color: #fbbf24; }
+        .error { color: #f87171; }
+        .level-l1 { color: #93c5fd; }
+        .level-l2 { color: #c4b5fd; }
 
         .progress-bar { width: 100%; height: 30px; background-color: #27272a; border-radius: 5px; overflow: hidden; margin: 15px 0; }
         .progress-fill { height: 100%; background-color: #22c55e; text-align: center; line-height: 30px; color: white; font-weight: bold; }
+
+        /* Search Box */
+        .search-container {
+            position: relative;
+            margin: 20px 0;
+            max-width: 100%;
+        }
+        #searchBox {
+            width: 100%;
+            padding: 15px 50px 15px 20px;
+            font-size: 16px;
+            background-color: #27272a;
+            border: 2px solid #3f3f46;
+            border-radius: 8px;
+            color: #f4f4f5;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+        #searchBox:focus {
+            border-color: #60a5fa;
+            box-shadow: 0 0 10px rgba(96, 165, 250, 0.3);
+        }
+        #searchBox::placeholder {
+            color: #71717a;
+        }
+        .search-icon {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 20px;
+            pointer-events: none;
+        }
+        .search-results {
+            display: block;
+            margin-top: 8px;
+            font-size: 14px;
+            color: #a1a1aa;
+        }
 
         table { width: 100%; border-collapse: collapse; background: #18181b; border: 1px solid #27272a; margin-top: 20px; }
         th { background-color: #1e3a8a; color: white; padding: 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #60a5fa; }
@@ -3374,10 +3463,24 @@ function Export-HtmlReport {
         <div class="summary-box" data-filter="all" onclick="filterResults(this)">
             <strong>Total Controls:</strong> $Script:TotalControls
         </div>
+        <div class="summary-box level-l1" data-filter="L1" onclick="filterResults(this)">
+            <strong>L1 Checks:</strong> $Script:L1PassedControls / $Script:L1TotalControls ($l1PassRate%)
+        </div>
+        <div class="summary-box level-l2" data-filter="L2" onclick="filterResults(this)">
+            <strong>L2 Checks:</strong> $Script:L2PassedControls / $Script:L2TotalControls ($l2PassRate%)
+        </div>
     </div>
 
     <h2>Detailed Results</h2>
-    <table>
+
+    <!-- Search Box -->
+    <div class="search-container">
+        <input type="text" id="searchBox" placeholder="Search by control number, title, level (L1/L2), or status (Pass/Fail/Manual)..." onkeyup="searchTable()">
+        <span class="search-icon">🔍</span>
+        <span id="searchResults" class="search-results"></span>
+    </div>
+
+    <table id="resultsTable">
         <thead>
             <tr>
                 <th>Control</th>
@@ -3393,8 +3496,9 @@ function Export-HtmlReport {
     foreach ($result in $Script:Results | Sort-Object ControlNumber) {
         $statusClass = "status-" + $result.Result.ToLower()
         $resultLower = $result.Result.ToLower()
+        $levelValue = $result.ProfileLevel
         $html += @"
-            <tr data-result="$resultLower">
+            <tr data-result="$resultLower" data-level="$levelValue">
                 <td><strong>$($result.ControlNumber)</strong></td>
                 <td>$($result.ControlTitle)</td>
                 <td>$($result.ProfileLevel)</td>
@@ -3446,6 +3550,10 @@ function Export-HtmlReport {
             const allRows = document.querySelectorAll('tbody tr');
             const allBoxes = document.querySelectorAll('.summary-box');
 
+            // Clear search box when using filter buttons
+            document.getElementById('searchBox').value = '';
+            document.getElementById('searchResults').textContent = '';
+
             // Toggle filter - if same box clicked, clear filter
             if (activeFilter === filterValue) {
                 // Clear filter - show all
@@ -3462,10 +3570,11 @@ function Export-HtmlReport {
                     // Show all rows
                     allRows.forEach(row => row.classList.remove('hidden'));
                 } else {
-                    // Filter by result type
+                    // Filter by result type or level
                     allRows.forEach(row => {
                         const rowResult = row.getAttribute('data-result');
-                        if (rowResult === filterValue) {
+                        const rowLevel = row.getAttribute('data-level');
+                        if (rowResult === filterValue || rowLevel === filterValue) {
                             row.classList.remove('hidden');
                         } else {
                             row.classList.add('hidden');
@@ -3473,6 +3582,62 @@ function Export-HtmlReport {
                     });
                 }
             }
+        }
+
+        function searchTable() {
+            // Clear any active filter when searching
+            const allBoxes = document.querySelectorAll('.summary-box');
+            allBoxes.forEach(b => b.classList.remove('active'));
+            activeFilter = null;
+
+            const searchInput = document.getElementById('searchBox');
+            const filter = searchInput.value.toLowerCase().trim();
+            const table = document.getElementById('resultsTable');
+            const tbody = table.getElementsByTagName('tbody')[0];
+            const rows = tbody.getElementsByTagName('tr');
+            let visibleCount = 0;
+            let totalCount = rows.length;
+
+            // If search is empty, show all rows
+            if (filter === '') {
+                for (let i = 0; i < rows.length; i++) {
+                    rows[i].classList.remove('hidden');
+                }
+                document.getElementById('searchResults').textContent = '';
+                return;
+            }
+
+            // Search through all rows
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                const cells = row.getElementsByTagName('td');
+
+                if (cells.length > 0) {
+                    const controlNumber = cells[0].textContent.toLowerCase();
+                    const title = cells[1].textContent.toLowerCase();
+                    const level = cells[2].textContent.toLowerCase();
+                    const result = cells[3].textContent.toLowerCase();
+                    const details = cells[4].textContent.toLowerCase();
+
+                    // Check if any cell contains the search term
+                    if (controlNumber.includes(filter) ||
+                        title.includes(filter) ||
+                        level.includes(filter) ||
+                        result.includes(filter) ||
+                        details.includes(filter)) {
+                        row.classList.remove('hidden');
+                        visibleCount++;
+                    } else {
+                        row.classList.add('hidden');
+                    }
+                }
+            }
+
+            // Update search results counter
+            const resultsText = visibleCount === 1
+                ? `Found 1 result out of ${totalCount} controls`
+                : `Found ${visibleCount} results out of ${totalCount} controls`;
+            document.getElementById('searchResults').textContent = resultsText;
         }
     </script>
 </body>
@@ -3599,6 +3764,23 @@ function Start-ComplianceCheck {
         $complianceRate = [math]::Round(($Script:PassedControls / ($Script:TotalControls - $Script:ManualControls)) * 100, 2)
         Write-Host "`nAutomated Compliance Rate: " -NoNewline
         Write-Host "$complianceRate%" -ForegroundColor Cyan
+    }
+
+    # Display L1 and L2 statistics
+    Write-Host "`n--- Profile Level Statistics ---" -ForegroundColor Cyan
+    if ($Script:L1TotalControls -gt 0) {
+        $l1Rate = if (($Script:L1TotalControls - $Script:L1ManualControls) -gt 0) {
+            [math]::Round(($Script:L1PassedControls / ($Script:L1TotalControls - $Script:L1ManualControls)) * 100, 2)
+        } else { 0 }
+        Write-Host "L1 Controls: " -NoNewline -ForegroundColor Blue
+        Write-Host "$Script:L1PassedControls passed / $Script:L1TotalControls total ($l1Rate%)" -ForegroundColor White
+    }
+    if ($Script:L2TotalControls -gt 0) {
+        $l2Rate = if (($Script:L2TotalControls - $Script:L2ManualControls) -gt 0) {
+            [math]::Round(($Script:L2PassedControls / ($Script:L2TotalControls - $Script:L2ManualControls)) * 100, 2)
+        } else { 0 }
+        Write-Host "L2 Controls: " -NoNewline -ForegroundColor Magenta
+        Write-Host "$Script:L2PassedControls passed / $Script:L2TotalControls total ($l2Rate%)" -ForegroundColor White
     }
 
     Write-Host "`n"
