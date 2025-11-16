@@ -3262,8 +3262,9 @@ function Export-HtmlReport {
         /* Content */
         .content { padding: 10px 40px 20px 40px; }
         h2 { color: #60a5fa; margin-top: 30px; margin-bottom: 15px; }
+        h2:first-child { margin-top: 0; margin-bottom: 10px; }
 
-        .summary { background: #18181b; padding: 15px; border-radius: 8px; margin-bottom: 25px; border: 1px solid #27272a; }
+        .summary { background: #18181b; padding: 12px 15px; border-radius: 8px; margin-bottom: 25px; border: 1px solid #27272a; }
 
         @keyframes borderGlow {
             0%, 100% { box-shadow: 0 0 5px rgba(255, 255, 255, 0.5), 0 0 10px rgba(255, 255, 255, 0.3); }
