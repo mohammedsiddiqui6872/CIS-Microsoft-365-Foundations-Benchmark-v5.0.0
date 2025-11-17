@@ -236,6 +236,10 @@ function Connect-CISBenchmark {
         if ($UseDeviceCode) {
             $params['UseDeviceCode'] = $true
         }
+        elseif ($PSVersionTable.PSVersion.Major -ge 7) {
+            Write-Host "PowerShell 7+ detected - Using Device Code authentication for compatibility" -ForegroundColor Cyan
+            $params['UseDeviceCode'] = $true
+        }
 
         Connect-MgGraph @params
 
