@@ -2,6 +2,19 @@
 
 All notable changes to the CIS Microsoft 365 Foundations Benchmark Compliance Checker will be documented in this file.
 
+## [2.5.2] - 2025-11-17
+
+### 🐛 Bug Fixes
+- **Fixed Click Functionality**: Resolved critical issues with interactive elements in HTML reports
+  - Converted all inline onclick handlers to programmatic event listeners
+  - Fixed tenant name dropdown not responding to clicks
+  - Fixed score card filtering not working when clicked
+  - Added proper DOM ready detection with multiple fallback mechanisms
+  - Enhanced event attachment reliability with defensive coding
+  - Improved search box functionality with both keyup and input events
+  - Added console logging for debugging event attachment
+  - Ensures all interactive elements work across different browsers and security contexts
+
 ## [2.4.4] - 2025-01-17
 
 ### ✨ New Features
