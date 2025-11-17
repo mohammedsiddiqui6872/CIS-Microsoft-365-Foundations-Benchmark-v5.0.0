@@ -2,6 +2,16 @@
 
 All notable changes to the CIS Microsoft 365 Foundations Benchmark Compliance Checker will be documented in this file.
 
+## [2.5.5] - 2025-11-18
+
+### 🐛 Bug Fixes
+- **Fixed CIS 5.2.3.1 Test**: Handle missing numberMatchingRequiredState property in Microsoft Authenticator settings
+  - Microsoft changed API behavior in 2025 where enabled number matching no longer returns the numberMatchingRequiredState property
+  - Test was incorrectly failing when property was absent, treating it as "not configured"
+  - Updated logic to treat absent numberMatchingRequiredState property as "default (enabled)"
+  - This aligns with Microsoft's 2025 update making number matching enabled by default
+  - Fixes false negatives for organizations with properly configured Microsoft Authenticator settings
+
 ## [2.5.4] - 2025-11-17
 
 ### 🐛 Critical Bug Fix
