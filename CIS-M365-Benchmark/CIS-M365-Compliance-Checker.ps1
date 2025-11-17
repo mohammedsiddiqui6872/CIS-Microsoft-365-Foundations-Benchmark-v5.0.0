@@ -3744,8 +3744,8 @@ function Export-HtmlReport {
 
             // Update search results counter
             const resultsText = visibleCount === 1
-                ? `Found 1 result out of ${totalCount} controls`
-                : `Found ${visibleCount} results out of ${totalCount} controls`;
+                ? 'Found 1 result out of ' + totalCount + ' controls'
+                : 'Found ' + visibleCount + ' results out of ' + totalCount + ' controls';
             document.getElementById('searchResults').textContent = resultsText;
         }
     </script>

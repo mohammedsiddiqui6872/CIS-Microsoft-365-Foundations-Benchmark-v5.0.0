@@ -2,6 +2,15 @@
 
 All notable changes to the CIS Microsoft 365 Foundations Benchmark Compliance Checker will be documented in this file.
 
+## [2.5.4] - 2025-11-17
+
+### 🐛 Critical Bug Fix
+- **Fixed JavaScript Syntax Error in HTML Reports**: Resolved template literal issue
+  - Fixed JavaScript template literals that were being incorrectly processed by PowerShell
+  - Changed from ES6 template literals to string concatenation to avoid PowerShell variable expansion
+  - Resolves "Uncaught SyntaxError: Unexpected number" error that broke all interactive features
+  - All click handlers and search functionality now work correctly
+
 ## [2.5.3] - 2025-11-17
 
 ### 🐛 Bug Fixes
