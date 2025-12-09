@@ -2,6 +2,15 @@
 
 All notable changes to the CIS Microsoft 365 Foundations Benchmark Compliance Checker will be documented in this file.
 
+## [2.5.7] - 2025-12-09
+
+### 🔧 Maintenance
+- **Fixed Version Number Discrepancy**: Updated script header version to match module version
+  - Script header was showing version 1.0 (outdated)
+  - Updated to version 2.5.7 to match module manifest
+  - Updated author information in script header
+  - Updated date to reflect current version
+
 ## [2.5.6] - 2025-12-09
 
 ### 🐛 Bug Fixes

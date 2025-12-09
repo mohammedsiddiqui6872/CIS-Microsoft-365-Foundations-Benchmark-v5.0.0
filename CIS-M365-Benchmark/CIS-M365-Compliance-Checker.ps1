@@ -7,9 +7,9 @@
     Generates detailed HTML and CSV reports showing compliance status for each control.
 
 .NOTES
-    Version: 1.0
-    Author: CIS Compliance Automation
-    Date: 2025-11-11
+    Version: 2.5.7
+    Author: Mohammed Siddiqui
+    Date: 2025-12-09
 
     Required PowerShell Modules:
     - Microsoft.Graph (Install-Module Microsoft.Graph -Scope CurrentUser)
