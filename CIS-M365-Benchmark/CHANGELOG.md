@@ -2,6 +2,23 @@
 
 All notable changes to the CIS Microsoft 365 Foundations Benchmark Compliance Checker will be documented in this file.
 
+## [2.5.6] - 2025-12-09
+
+### 🐛 Bug Fixes
+- **Fixed Device Code Authentication Issue**: Resolved authentication failure when using `-UseDeviceCode` parameter
+  - Issue: After running `Connect-CISBenchmark -UseDeviceCode`, running `Invoke-CISBenchmark` would fail because the compliance checker script was attempting to re-authenticate without checking for existing Graph connection
+  - Root cause: `Connect-M365Services` function in CIS-M365-Compliance-Checker.ps1 was blindly calling `Connect-MgGraph` without checking if already authenticated
+  - Fix: Added check for existing Microsoft Graph context before attempting new connection
+  - Now properly reuses the existing authenticated session established by `Connect-CISBenchmark`
+  - Eliminates redundant authentication prompts and respects the original authentication method (device code, interactive, etc.)
+  - Reported by community user Mateusz Jagiełło - thank you!
+
+### Technical Details
+- Modified `Connect-M365Services` function to call `Get-MgContext` first
+- Only attempts new Graph connection if no valid context exists
+- Displays "Microsoft Graph already connected - reusing existing session" message when reusing connection
+- Maintains backward compatibility - still works if user hasn't pre-authenticated
+
 ## [2.5.5] - 2025-11-18
 
 ### 🐛 Bug Fixes

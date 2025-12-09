@@ -165,17 +165,24 @@ function Connect-M365Services {
     Write-Log "NOTE: You will be prompted to sign in once. The same session will be used for all services." -Level Info
 
     try {
-        # Connect to Microsoft Graph first - this establishes the primary authentication
-        Write-Log "Connecting to Microsoft Graph..." -Level Info
-        Connect-MgGraph -Scopes "Directory.Read.All", "Policy.Read.All", "AuditLog.Read.All", `
-                               "UserAuthenticationMethod.Read.All", "IdentityRiskyUser.Read.All", `
-                               "IdentityRiskEvent.Read.All", "Application.Read.All", `
-                               "Organization.Read.All", "User.Read.All", "Group.Read.All", `
-                               "RoleManagement.Read.All", "Reports.Read.All" -NoWelcome -ErrorAction Stop
-        Write-Log "Connected to Microsoft Graph" -Level Success
+        # Check if Microsoft Graph is already connected (e.g., via Connect-CISBenchmark)
+        $mgContext = Get-MgContext -ErrorAction SilentlyContinue
 
-        # Get the current Graph context to reuse credentials
-        $mgContext = Get-MgContext
+        if (-not $mgContext -or -not $mgContext.TenantId) {
+            # Connect to Microsoft Graph first - this establishes the primary authentication
+            Write-Log "Connecting to Microsoft Graph..." -Level Info
+            Connect-MgGraph -Scopes "Directory.Read.All", "Policy.Read.All", "AuditLog.Read.All", `
+                                   "UserAuthenticationMethod.Read.All", "IdentityRiskyUser.Read.All", `
+                                   "IdentityRiskEvent.Read.All", "Application.Read.All", `
+                                   "Organization.Read.All", "User.Read.All", "Group.Read.All", `
+                                   "RoleManagement.Read.All", "Reports.Read.All" -NoWelcome -ErrorAction Stop
+            Write-Log "Connected to Microsoft Graph" -Level Success
+            $mgContext = Get-MgContext
+        } else {
+            Write-Log "Microsoft Graph already connected - reusing existing session" -Level Success
+        }
+
+        # Get the tenant ID to reuse for other service connections
         $tenantId = $mgContext.TenantId
 
         Write-Log "Using authenticated session for remaining services (TenantId: $tenantId)..." -Level Info
