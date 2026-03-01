@@ -6,6 +6,7 @@
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![CIS Benchmark](https://img.shields.io/badge/CIS%20Benchmark-v6.0.0-orange.svg)](https://www.cisecurity.org/)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support-yellow.svg)](https://buymeacoffee.com/mohammedsiddiqui)
+[![PowerShellNerd Profile](https://img.shields.io/badge/PowerShellNerd-Profile-purple.svg)](https://powershellnerd.com/profile/mohammedsiddiqui)
 
 A comprehensive PowerShell module that audits your Microsoft 365 environment against **all 140 CIS Microsoft 365 Foundations Benchmark v6.0.0 controls** and generates detailed HTML and CSV compliance reports.
 
@@ -75,12 +76,6 @@ Install-Module -Name CIS-M365-Benchmark -Scope CurrentUser
 # Update to latest version
 Update-Module -Name CIS-M365-Benchmark
 ```
-
-### Support This Project
-
-If this toolkit has helped improve your security compliance, consider supporting its development:
-
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support%20This%20Project-yellow.svg?style=for-the-badge&logo=buy-me-a-coffee)](https://buymeacoffee.com/mohammedsiddiqui)
 
 ## Prerequisites
 
@@ -223,11 +218,8 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## Author
 
 **Mohammed Siddiqui**
-- GitHub: [@mohammedsiddiqui6872](https://github.com/mohammedsiddiqui6872)
 - LinkedIn: [Let's Chat!](https://www.linkedin.com/in/mohammedsiddiqui6872/)
-- Website: [PowerShellNerd](https://powershellnerd.com)
 - Profile: [PowerShellNerd Profile](https://powershellnerd.com/profile/mohammedsiddiqui)
-- Support: [Buy Me a Coffee](https://buymeacoffee.com/mohammedsiddiqui)
 
 ## Acknowledgments
 
@@ -242,8 +234,6 @@ For issues, questions, or suggestions:
 - [Open an Issue](https://github.com/mohammedsiddiqui6872/CIS-Microsoft-365-Foundations-Benchmark/issues)
 - [Start a Discussion](https://github.com/mohammedsiddiqui6872/CIS-Microsoft-365-Foundations-Benchmark/discussions)
 - [PowerShellNerd](https://powershellnerd.com)
-
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support-yellow.svg?style=for-the-badge&logo=buy-me-a-coffee)](https://buymeacoffee.com/mohammedsiddiqui)
 
 ---
 
