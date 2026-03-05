@@ -1,7 +1,7 @@
 @{
 
 RootModule = 'CIS-M365-Benchmark.psm1'
-ModuleVersion = '5.0.0'
+ModuleVersion = '5.1.0'
 CompatiblePSEditions = @('Desktop', 'Core')
 GUID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
 Author = 'Mohammed Siddiqui'
@@ -13,6 +13,7 @@ PowerShellVersion = '5.1'
 FunctionsToExport = @(
     'Connect-CISM365Benchmark',
     'Invoke-CISM365Benchmark',
+    'Disconnect-CISM365Benchmark',
     'Get-CISM365BenchmarkControl',
     'Test-CISM365BenchmarkPrerequisites',
     'Get-CISM365BenchmarkInfo'

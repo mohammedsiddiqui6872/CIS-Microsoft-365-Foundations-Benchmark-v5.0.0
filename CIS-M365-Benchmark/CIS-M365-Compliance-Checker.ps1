@@ -9,7 +9,7 @@
     Generates detailed HTML and CSV reports showing compliance status for each control.
 
 .NOTES
-    Version: 4.2.0
+    Version: 5.0.0
     Author: Mohammed Siddiqui
     Date: 2026-03-03
 
@@ -48,7 +48,11 @@ param(
 
     [Parameter(Mandatory=$false)]
     [ValidateSet('L1','L2','All')]
-    [string]$ProfileLevel = 'All'
+    [string]$ProfileLevel = 'All',
+
+    [Parameter(Mandatory=$false)]
+    [ValidateSet('AdminCenter','Defender','Purview','Intune','EntraID','Exchange','SharePoint','Teams','PowerBI')]
+    [string[]]$ExcludeSections = @()
 )
 
 # Global Variables
@@ -292,7 +296,9 @@ function Connect-M365Services {
                                    "Organization.Read.All", "User.Read.All", "Group.Read.All", `
                                    "RoleManagement.Read.All", "Reports.Read.All", `
                                    "DeviceManagementConfiguration.Read.All", `
-                                   "DeviceManagementServiceConfig.Read.All" -NoWelcome -ErrorAction Stop
+                                   "DeviceManagementServiceConfig.Read.All", `
+                                   "OrgSettings-AppsAndServices.Read.All", `
+                                   "OrgSettings-Forms.Read.All" -NoWelcome -ErrorAction Stop
             Write-Log "Connected to Microsoft Graph" -Level Success
             $mgContext = Get-MgContext
         } else {
@@ -414,10 +420,64 @@ function Test-M365AdminCenter {
                    -ProfileLevel "L1" -Result "Error" -Details "Error: $_"
     }
 
-    # 1.1.2 - Ensure two emergency access accounts have been defined (Manual)
-    Add-Result -ControlNumber "1.1.2" -ControlTitle "Ensure two emergency access accounts have been defined" `
-               -ProfileLevel "L1" -Result "Manual" -Details "Manual verification required" `
-               -Remediation "Create and document two emergency 'break glass' accounts"
+    # 1.1.2 - Ensure two emergency access accounts have been defined
+    try {
+        Write-Log "Checking 1.1.2 - Emergency access accounts" -Level Info
+
+        # Get Global Administrator role members
+        $globalAdminRole = Get-MgDirectoryRole -Filter "DisplayName eq 'Global Administrator'" -ErrorAction Stop
+        $globalAdminMembers = Get-MgDirectoryRoleMember -DirectoryRoleId $globalAdminRole.Id -ErrorAction Stop
+
+        # Get all Conditional Access policies to find excluded users
+        $caPolicies = Get-MgIdentityConditionalAccessPolicy -All -ErrorAction Stop
+        $caExcludedUsers = @{}
+        foreach ($policy in $caPolicies) {
+            if ($policy.State -eq 'enabled' -and $policy.Conditions.Users.ExcludeUsers) {
+                foreach ($uid in $policy.Conditions.Users.ExcludeUsers) {
+                    if (-not $caExcludedUsers.ContainsKey($uid)) { $caExcludedUsers[$uid] = 0 }
+                    $caExcludedUsers[$uid]++
+                }
+            }
+        }
+        $enabledPolicyCount = ($caPolicies | Where-Object { $_.State -eq 'enabled' }).Count
+
+        # Identify emergency access accounts: cloud-only Global Admins excluded from CA policies
+        $emergencyAccounts = @()
+        foreach ($member in $globalAdminMembers) {
+            if ($member.AdditionalProperties.'@odata.type' -ne '#microsoft.graph.user') { continue }
+            $user = Get-MgUser -UserId $member.Id -Property Id,UserPrincipalName,DisplayName,OnPremisesSyncEnabled,AccountEnabled -ErrorAction Stop
+            if ($user.OnPremisesSyncEnabled -eq $true) { continue }
+            if (-not $user.AccountEnabled) { continue }
+
+            # Check if excluded from most CA policies (emergency accounts should be excluded from all/most)
+            $excludedCount = if ($caExcludedUsers.ContainsKey($user.Id)) { $caExcludedUsers[$user.Id] } else { 0 }
+            $excludeRatio = if ($enabledPolicyCount -gt 0) { $excludedCount / $enabledPolicyCount } else { 0 }
+
+            # Emergency account heuristics: excluded from at least 50% of CA policies
+            if ($excludeRatio -ge 0.5) {
+                $emergencyAccounts += "$($user.UserPrincipalName) (excluded from $excludedCount/$enabledPolicyCount CA policies)"
+            }
+        }
+
+        if ($emergencyAccounts.Count -ge 2) {
+            Add-Result -ControlNumber "1.1.2" -ControlTitle "Ensure two emergency access accounts have been defined" `
+                       -ProfileLevel "L1" -Result "Pass" -Details "Found $($emergencyAccounts.Count) emergency access accounts: $($emergencyAccounts -join '; ')"
+        }
+        elseif ($emergencyAccounts.Count -eq 1) {
+            Add-Result -ControlNumber "1.1.2" -ControlTitle "Ensure two emergency access accounts have been defined" `
+                       -ProfileLevel "L1" -Result "Fail" -Details "Only 1 emergency access account detected: $($emergencyAccounts -join '; '). At least 2 are required." `
+                       -Remediation "Create a second emergency access (break glass) account that is cloud-only, has Global Admin role, and is excluded from all Conditional Access policies"
+        }
+        else {
+            Add-Result -ControlNumber "1.1.2" -ControlTitle "Ensure two emergency access accounts have been defined" `
+                       -ProfileLevel "L1" -Result "Fail" -Details "No emergency access accounts detected. Looked for cloud-only Global Admins excluded from Conditional Access policies." `
+                       -Remediation "Create two emergency access (break glass) accounts that are cloud-only, have Global Admin role, and are excluded from all Conditional Access policies"
+        }
+    }
+    catch {
+        Add-Result -ControlNumber "1.1.2" -ControlTitle "Ensure two emergency access accounts have been defined" `
+                   -ProfileLevel "L1" -Result "Error" -Details "Error: $_"
+    }
 
     # 1.1.3 - Ensure that between two and four global admins are designated
     try {
@@ -749,10 +809,39 @@ function Test-M365AdminCenter {
                -Remediation "Disable external Sway sharing"
 
     # 1.3.9 - Ensure shared bookings pages are restricted to select users (NEW in v6.0.0)
-    Write-Log "Checking 1.3.9 - Shared bookings page restrictions" -Level Info
-    Add-Result -ControlNumber "1.3.9" -ControlTitle "Ensure shared bookings pages are restricted to select users" `
-               -ProfileLevel "L1" -Result "Manual" -Details "Manual verification required. Check Microsoft 365 Admin Center > Settings > Org settings > Bookings" `
-               -Remediation "Restrict shared bookings pages to selected users in Org settings > Bookings"
+    try {
+        Write-Log "Checking 1.3.9 - Shared bookings page restrictions" -Level Info
+
+        $orgConfig = Get-OrganizationConfig -ErrorAction Stop
+        $owaPolicies = Get-OwaMailboxPolicy -ErrorAction Stop
+
+        $bookingsEnabled = $orgConfig.BookingsEnabled
+        $bookingsCreationPolicies = @($owaPolicies | Where-Object { $_.BookingsMailboxCreationEnabled -eq $true })
+        $allPolicies = @($owaPolicies)
+
+        if ($bookingsEnabled -eq $false) {
+            Add-Result -ControlNumber "1.3.9" -ControlTitle "Ensure shared bookings pages are restricted to select users" `
+                       -ProfileLevel "L1" -Result "Pass" -Details "Microsoft Bookings is disabled organization-wide"
+        }
+        elseif ($bookingsCreationPolicies.Count -eq 0) {
+            Add-Result -ControlNumber "1.3.9" -ControlTitle "Ensure shared bookings pages are restricted to select users" `
+                       -ProfileLevel "L1" -Result "Pass" -Details "Bookings mailbox creation is disabled in all $($allPolicies.Count) OWA mailbox policies"
+        }
+        elseif ($bookingsCreationPolicies.Count -lt $allPolicies.Count) {
+            $enabledNames = ($bookingsCreationPolicies | ForEach-Object { $_.Name }) -join ', '
+            Add-Result -ControlNumber "1.3.9" -ControlTitle "Ensure shared bookings pages are restricted to select users" `
+                       -ProfileLevel "L1" -Result "Pass" -Details "Bookings creation restricted to select policies ($($bookingsCreationPolicies.Count)/$($allPolicies.Count)): $enabledNames"
+        }
+        else {
+            Add-Result -ControlNumber "1.3.9" -ControlTitle "Ensure shared bookings pages are restricted to select users" `
+                       -ProfileLevel "L1" -Result "Fail" -Details "Bookings mailbox creation is enabled in all $($allPolicies.Count) OWA mailbox policies - not restricted to select users" `
+                       -Remediation "Set BookingsMailboxCreationEnabled to `$false on OWA mailbox policies, or disable Bookings via Set-OrganizationConfig -BookingsEnabled `$false"
+        }
+    }
+    catch {
+        Add-Result -ControlNumber "1.3.9" -ControlTitle "Ensure shared bookings pages are restricted to select users" `
+                   -ProfileLevel "L1" -Result "Error" -Details "Error: $_"
+    }
 }
 
 #endregion
@@ -1744,9 +1833,75 @@ function Test-EntraID {
     }
 
     # 5.1.2.5 - Ensure the option to remain signed in is hidden
-    Add-Result -ControlNumber "5.1.2.5" -ControlTitle "Ensure the option to remain signed in is hidden" `
-               -ProfileLevel "L2" -Result "Manual" -Details "Check Company Branding settings" `
-               -Remediation "Hide 'Stay signed in?' option in company branding"
+    try {
+        Write-Log "Checking 5.1.2.5 - Stay signed in option hidden" -Level Info
+
+        $kmsiHidden = $false
+        $detailMsg = ""
+
+        # Method 1: Check organization branding via Graph API
+        try {
+            $brandingResponse = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/organization/$($(Get-MgOrganization | Select-Object -First 1).Id)/branding" -ErrorAction Stop
+            if ($brandingResponse.signInPageText.isKmsiHidden -eq $true) {
+                $kmsiHidden = $true
+                $detailMsg = "KMSI is hidden via organization branding (signInPageText.isKmsiHidden = true)"
+            }
+            elseif ($null -ne $brandingResponse.signInPageText) {
+                $detailMsg = "KMSI is NOT hidden in organization branding (signInPageText.isKmsiHidden = $($brandingResponse.signInPageText.isKmsiHidden))"
+            }
+        }
+        catch {
+            Write-Log "Could not check branding v1.0 endpoint: $_" -Level Warning
+        }
+
+        # Method 2: Check via beta loginPageTextVisibilitySettings if method 1 didn't confirm
+        if (-not $kmsiHidden) {
+            try {
+                $betaBranding = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/beta/organization/$($(Get-MgOrganization | Select-Object -First 1).Id)/branding" -ErrorAction Stop
+                if ($betaBranding.loginPageTextVisibilitySettings.hideAccountResetCredentials -eq $true -or
+                    $betaBranding.loginPageTextVisibilitySettings.isKmsiHidden -eq $true) {
+                    $kmsiHidden = $true
+                    $detailMsg = "KMSI is hidden via organization branding (beta endpoint)"
+                }
+                elseif (-not $detailMsg) {
+                    $detailMsg = "KMSI is NOT hidden in organization branding"
+                }
+            }
+            catch {
+                Write-Log "Could not check branding beta endpoint: $_" -Level Warning
+            }
+        }
+
+        # Method 3: Check Conditional Access for persistent browser session controls
+        if (-not $kmsiHidden -and $cachedCAPolicies) {
+            $persistentBrowserPolicies = @($cachedCAPolicies | Where-Object {
+                $_.State -eq 'enabled' -and
+                $_.SessionControls.PersistentBrowser.Mode -eq 'never' -and
+                $_.SessionControls.PersistentBrowser.IsEnabled -eq $true -and
+                $_.Conditions.Users.IncludeUsers -contains 'All'
+            })
+            if ($persistentBrowserPolicies.Count -gt 0) {
+                $kmsiHidden = $true
+                $policyNames = ($persistentBrowserPolicies | ForEach-Object { $_.DisplayName }) -join ', '
+                $detailMsg = "Persistent browser session disabled for all users via Conditional Access: $policyNames"
+            }
+        }
+
+        if ($kmsiHidden) {
+            Add-Result -ControlNumber "5.1.2.5" -ControlTitle "Ensure the option to remain signed in is hidden" `
+                       -ProfileLevel "L2" -Result "Pass" -Details $detailMsg
+        }
+        else {
+            if (-not $detailMsg) { $detailMsg = "Could not confirm KMSI is hidden" }
+            Add-Result -ControlNumber "5.1.2.5" -ControlTitle "Ensure the option to remain signed in is hidden" `
+                       -ProfileLevel "L2" -Result "Fail" -Details $detailMsg `
+                       -Remediation "Hide 'Stay signed in?' option in Entra Admin Center > User experiences > Company branding > Sign-in form > 'Show option to remain signed in' = No"
+        }
+    }
+    catch {
+        Add-Result -ControlNumber "5.1.2.5" -ControlTitle "Ensure the option to remain signed in is hidden" `
+                   -ProfileLevel "L2" -Result "Error" -Details "Error: $_"
+    }
 
     # 5.1.2.6 - Ensure 'LinkedIn account connections' is disabled
     try {
@@ -5246,7 +5401,7 @@ function Export-HtmlReport {
         <tbody>
 "@
 
-    foreach ($result in $Script:Results | Sort-Object { [array]($_.ControlNumber -split '\.' | ForEach-Object { [int]$_ }) }) {
+    foreach ($result in $Script:Results | Sort-Object { ($_.ControlNumber -split '\.' | ForEach-Object { $_.PadLeft(4, '0') }) -join '.' }) {
         $statusClass = "status-" + $result.Result.ToLower()
         $resultLower = $result.Result.ToLower()
         $levelValue = $result.ProfileLevel
@@ -5439,7 +5594,7 @@ function Export-CsvReport {
     param([string]$OutputPath)
 
     $csvPath = Join-Path $OutputPath "CIS-M365-Compliance-Report_$(Get-Date -Format 'yyyyMMdd_HHmmss').csv"
-    $Script:Results | Sort-Object { [array]($_.ControlNumber -split '\.' | ForEach-Object { [int]$_ }) } | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
+    $Script:Results | Sort-Object { ($_.ControlNumber -split '\.' | ForEach-Object { $_.PadLeft(4, '0') }) -join '.' } | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
     Write-Log "CSV report saved to: $csvPath" -Level Success
     return $csvPath
 }
@@ -5524,16 +5679,23 @@ function Start-ComplianceCheck {
 
     # Run all checks with progress tracking
     $sections = @(
-        @{ Name = "Microsoft 365 Admin Center"; Function = { Test-M365AdminCenter } }
-        @{ Name = "Microsoft 365 Defender"; Function = { Test-M365Defender } }
-        @{ Name = "Microsoft Purview"; Function = { Test-Purview } }
-        @{ Name = "Microsoft Intune"; Function = { Test-Intune } }
-        @{ Name = "Microsoft Entra ID"; Function = { Test-EntraID } }
-        @{ Name = "Exchange Online"; Function = { Test-ExchangeOnline } }
-        @{ Name = "SharePoint Online"; Function = { Test-SharePointOnline } }
-        @{ Name = "Microsoft Teams"; Function = { Test-MicrosoftTeams } }
-        @{ Name = "Power BI"; Function = { Test-PowerBI } }
+        @{ Key = "AdminCenter"; Name = "Microsoft 365 Admin Center"; Function = { Test-M365AdminCenter } }
+        @{ Key = "Defender";    Name = "Microsoft 365 Defender";     Function = { Test-M365Defender } }
+        @{ Key = "Purview";     Name = "Microsoft Purview";          Function = { Test-Purview } }
+        @{ Key = "Intune";      Name = "Microsoft Intune";           Function = { Test-Intune } }
+        @{ Key = "EntraID";     Name = "Microsoft Entra ID";         Function = { Test-EntraID } }
+        @{ Key = "Exchange";    Name = "Exchange Online";            Function = { Test-ExchangeOnline } }
+        @{ Key = "SharePoint";  Name = "SharePoint Online";          Function = { Test-SharePointOnline } }
+        @{ Key = "Teams";       Name = "Microsoft Teams";            Function = { Test-MicrosoftTeams } }
+        @{ Key = "PowerBI";     Name = "Power BI";                   Function = { Test-PowerBI } }
     )
+
+    # Filter out excluded sections
+    if ($ExcludeSections.Count -gt 0) {
+        $excludedNames = ($sections | Where-Object { $_.Key -in $ExcludeSections } | ForEach-Object { $_.Name }) -join ', '
+        Write-Log "Excluding sections: $excludedNames" -Level Warning
+        $sections = @($sections | Where-Object { $_.Key -notin $ExcludeSections })
+    }
 
     $totalSections = $sections.Count
     $currentSection = 0

@@ -233,7 +233,9 @@ function Connect-CISM365Benchmark {
             "Group.Read.All",
             "Application.Read.All",
             "DeviceManagementConfiguration.Read.All",
-            "DeviceManagementServiceConfig.Read.All"
+            "DeviceManagementServiceConfig.Read.All",
+            "OrgSettings-AppsAndServices.Read.All",
+            "OrgSettings-Forms.Read.All"
         ),
 
         [switch]$UseDeviceCode
@@ -414,7 +416,11 @@ function Invoke-CISM365Benchmark {
 
         [Parameter(Mandatory=$false)]
         [ValidateSet('L1','L2','All')]
-        [string]$ProfileLevel = 'All'
+        [string]$ProfileLevel = 'All',
+
+        [Parameter(Mandatory=$false, HelpMessage="Sections to exclude from the benchmark run. Valid values: AdminCenter, Defender, Purview, Intune, EntraID, Exchange, SharePoint, Teams, PowerBI")]
+        [ValidateSet('AdminCenter','Defender','Purview','Intune','EntraID','Exchange','SharePoint','Teams','PowerBI')]
+        [string[]]$ExcludeSections = @()
     )
 
     begin {
@@ -441,7 +447,7 @@ function Invoke-CISM365Benchmark {
                     Write-Host "Attempting automatic authentication..." -ForegroundColor Yellow
 
                     try {
-                        Connect-MgGraph -Scopes "Organization.Read.All","Directory.Read.All","Policy.Read.All","UserAuthenticationMethod.Read.All","RoleManagement.Read.All","User.Read.All","Group.Read.All","Application.Read.All","DeviceManagementConfiguration.Read.All","DeviceManagementServiceConfig.Read.All" -ErrorAction Stop | Out-Null
+                        Connect-MgGraph -Scopes "Organization.Read.All","Directory.Read.All","Policy.Read.All","UserAuthenticationMethod.Read.All","RoleManagement.Read.All","User.Read.All","Group.Read.All","Application.Read.All","DeviceManagementConfiguration.Read.All","DeviceManagementServiceConfig.Read.All","OrgSettings-AppsAndServices.Read.All","OrgSettings-Forms.Read.All" -ErrorAction Stop | Out-Null
                         $graphContext = Get-MgContext
                         Write-Host "Authentication successful!" -ForegroundColor Green
                     }
@@ -525,6 +531,7 @@ function Invoke-CISM365Benchmark {
                 SharePointAdminUrl = $cleanSharePointUrl
                 OutputPath = $OutputPath
                 ProfileLevel = $ProfileLevel
+                ExcludeSections = $ExcludeSections
             }
 
             Write-Verbose "Executing CIS compliance checker script..."
@@ -609,7 +616,7 @@ function Get-CISM365BenchmarkControl {
 
     $controls = @(
         [PSCustomObject]@{ControlNumber="1.1.1"; Title="Ensure Administrative accounts are cloud-only"; Section="1"; ProfileLevel="L1"; Automated=$true}
-        [PSCustomObject]@{ControlNumber="1.1.2"; Title="Ensure two emergency access accounts have been defined"; Section="1"; ProfileLevel="L1"; Automated=$false}
+        [PSCustomObject]@{ControlNumber="1.1.2"; Title="Ensure two emergency access accounts have been defined"; Section="1"; ProfileLevel="L1"; Automated=$true}
         [PSCustomObject]@{ControlNumber="1.1.3"; Title="Ensure that between two and four global admins are designated"; Section="1"; ProfileLevel="L1"; Automated=$true}
         [PSCustomObject]@{ControlNumber="1.1.4"; Title="Ensure administrative accounts use licenses with a reduced application footprint"; Section="1"; ProfileLevel="L1"; Automated=$true}
         [PSCustomObject]@{ControlNumber="1.2.1"; Title="Ensure that only organizationally managed/approved public groups exist"; Section="1"; ProfileLevel="L2"; Automated=$true}
@@ -622,7 +629,7 @@ function Get-CISM365BenchmarkControl {
         [PSCustomObject]@{ControlNumber="1.3.6"; Title="Ensure the customer lockbox feature is enabled"; Section="1"; ProfileLevel="L2"; Automated=$false}
         [PSCustomObject]@{ControlNumber="1.3.7"; Title="Ensure 'third-party storage services' are restricted in 'Microsoft 365 on the web'"; Section="1"; ProfileLevel="L2"; Automated=$true}
         [PSCustomObject]@{ControlNumber="1.3.8"; Title="Ensure that Sways cannot be shared with people outside of your organization"; Section="1"; ProfileLevel="L2"; Automated=$false}
-        [PSCustomObject]@{ControlNumber="1.3.9"; Title="Ensure shared bookings pages are restricted to select users"; Section="1"; ProfileLevel="L1"; Automated=$false}
+        [PSCustomObject]@{ControlNumber="1.3.9"; Title="Ensure shared bookings pages are restricted to select users"; Section="1"; ProfileLevel="L1"; Automated=$true}
         [PSCustomObject]@{ControlNumber="2.1.1"; Title="Ensure Safe Links for Office Applications is Enabled"; Section="2"; ProfileLevel="L2"; Automated=$true}
         [PSCustomObject]@{ControlNumber="2.1.2"; Title="Ensure the Common Attachment Types Filter is enabled"; Section="2"; ProfileLevel="L1"; Automated=$true}
         [PSCustomObject]@{ControlNumber="2.1.3"; Title="Ensure notifications for internal users sending malware is Enabled"; Section="2"; ProfileLevel="L1"; Automated=$true}
@@ -653,7 +660,7 @@ function Get-CISM365BenchmarkControl {
         [PSCustomObject]@{ControlNumber="5.1.2.2"; Title="Ensure third party integrated applications are not allowed"; Section="5"; ProfileLevel="L2"; Automated=$true}
         [PSCustomObject]@{ControlNumber="5.1.2.3"; Title="Ensure 'Restrict non-admin users from creating tenants' is set to 'Yes'"; Section="5"; ProfileLevel="L1"; Automated=$true}
         [PSCustomObject]@{ControlNumber="5.1.2.4"; Title="Ensure access to the Entra admin center is restricted"; Section="5"; ProfileLevel="L1"; Automated=$true}
-        [PSCustomObject]@{ControlNumber="5.1.2.5"; Title="Ensure the option to remain signed in is hidden"; Section="5"; ProfileLevel="L2"; Automated=$false}
+        [PSCustomObject]@{ControlNumber="5.1.2.5"; Title="Ensure the option to remain signed in is hidden"; Section="5"; ProfileLevel="L2"; Automated=$true}
         [PSCustomObject]@{ControlNumber="5.1.2.6"; Title="Ensure 'LinkedIn account connections' is disabled"; Section="5"; ProfileLevel="L2"; Automated=$true}
         [PSCustomObject]@{ControlNumber="5.1.3.1"; Title="Ensure a dynamic group for guest users is created"; Section="5"; ProfileLevel="L1"; Automated=$true}
         [PSCustomObject]@{ControlNumber="5.1.3.2"; Title="Ensure users cannot create security groups"; Section="5"; ProfileLevel="L1"; Automated=$true}
@@ -839,9 +846,85 @@ function Get-CISM365BenchmarkInfo {
     Write-Host ""
 }
 
+function Disconnect-CISM365Benchmark {
+    <#
+    .SYNOPSIS
+        Disconnects all Microsoft 365 service sessions established by Connect-CISM365Benchmark.
+    .DESCRIPTION
+        Cleanly disconnects Microsoft Graph, Exchange Online, SharePoint Online,
+        Microsoft Teams, Security & Compliance (IPPS), and Power BI sessions.
+        Also removes any environment variables set during the session.
+    .EXAMPLE
+        Disconnect-CISM365Benchmark
+    #>
+    [CmdletBinding()]
+    param()
+
+    Write-Host "`nDisconnecting from Microsoft 365 services..." -ForegroundColor Yellow
+
+    # Microsoft Graph
+    try {
+        if (Get-MgContext -ErrorAction SilentlyContinue) {
+            Disconnect-MgGraph -ErrorAction Stop | Out-Null
+            Write-Host "  Disconnected from Microsoft Graph" -ForegroundColor Green
+        }
+    }
+    catch { Write-Host "  Could not disconnect Microsoft Graph: $_" -ForegroundColor DarkYellow }
+
+    # Exchange Online
+    try {
+        Get-PSSession | Where-Object { $_.ConfigurationName -eq 'Microsoft.Exchange' -or $_.Name -like '*ExchangeOnline*' } | ForEach-Object {
+            Remove-PSSession $_ -ErrorAction SilentlyContinue
+        }
+        if (Get-Command Disconnect-ExchangeOnline -ErrorAction SilentlyContinue) {
+            Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+        }
+        Write-Host "  Disconnected from Exchange Online" -ForegroundColor Green
+    }
+    catch { Write-Host "  Could not disconnect Exchange Online: $_" -ForegroundColor DarkYellow }
+
+    # SharePoint Online
+    try {
+        if (Get-Command Disconnect-SPOService -ErrorAction SilentlyContinue) {
+            Disconnect-SPOService -ErrorAction SilentlyContinue
+            Write-Host "  Disconnected from SharePoint Online" -ForegroundColor Green
+        }
+    }
+    catch { Write-Host "  Could not disconnect SharePoint Online: $_" -ForegroundColor DarkYellow }
+
+    # Microsoft Teams
+    try {
+        if (Get-Command Disconnect-MicrosoftTeams -ErrorAction SilentlyContinue) {
+            Disconnect-MicrosoftTeams -ErrorAction SilentlyContinue
+            Write-Host "  Disconnected from Microsoft Teams" -ForegroundColor Green
+        }
+    }
+    catch { Write-Host "  Could not disconnect Microsoft Teams: $_" -ForegroundColor DarkYellow }
+
+    # Security & Compliance (IPPS uses a remote PSSession)
+    try {
+        Get-PSSession | Where-Object { $_.ConfigurationName -eq 'Microsoft.Exchange' -and $_.ComputerName -like '*compliance*' } | ForEach-Object {
+            Remove-PSSession $_ -ErrorAction SilentlyContinue
+        }
+        Write-Host "  Disconnected from Security & Compliance" -ForegroundColor Green
+    }
+    catch { Write-Host "  Could not disconnect Security & Compliance: $_" -ForegroundColor DarkYellow }
+
+    # Clean up environment variables
+    @('CIS_USE_DEVICE_CODE', 'AZURE_IDENTITY_DISABLE_MULTITENANTAUTH') | ForEach-Object {
+        if (Test-Path "Env:\$_") { Remove-Item "Env:\$_" -ErrorAction SilentlyContinue }
+    }
+
+    # Reset prerequisite check flag so next Connect re-checks
+    $Script:PrerequisiteCheckRun = $false
+
+    Write-Host "`nAll sessions disconnected.`n" -ForegroundColor Green
+}
+
 Export-ModuleMember -Function @(
     'Connect-CISM365Benchmark',
     'Invoke-CISM365Benchmark',
+    'Disconnect-CISM365Benchmark',
     'Get-CISM365BenchmarkControl',
     'Test-CISM365BenchmarkPrerequisites',
     'Get-CISM365BenchmarkInfo'
