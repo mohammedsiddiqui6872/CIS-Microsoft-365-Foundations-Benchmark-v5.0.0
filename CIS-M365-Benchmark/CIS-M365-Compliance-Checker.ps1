@@ -311,12 +311,9 @@ function Connect-M365Services {
         Write-Log "Using authenticated session for remaining services (TenantId: $tenantId)..." -Level Info
 
         # ── Exchange Online ─────────────────────────────────────────────────
+        # Always use browser auth for Exchange - works reliably on both PS 5.1 and 7+
         Write-Log "Connecting to Exchange Online..." -Level Info
-        if ($useDeviceAuth) {
-            Connect-ExchangeOnline -ShowBanner:$false -Device -ErrorAction Stop
-        } else {
-            Connect-ExchangeOnline -ShowBanner:$false -DisableWAM -ErrorAction Stop
-        }
+        Connect-ExchangeOnline -ShowBanner:$false -DisableWAM -ErrorAction Stop
         Write-Log "Connected to Exchange Online" -Level Success
 
         # ── SharePoint Online ───────────────────────────────────────────────
