@@ -313,7 +313,7 @@ function Connect-M365Services {
         # ── Exchange Online ─────────────────────────────────────────────────
         # Always use browser auth for Exchange - works reliably on both PS 5.1 and 7+
         Write-Log "Connecting to Exchange Online..." -Level Info
-        Connect-ExchangeOnline -ShowBanner:$false -DisableWAM -ErrorAction Stop
+        Connect-ExchangeOnline -ShowBanner:$false -ErrorAction Stop
         Write-Log "Connected to Exchange Online" -Level Success
 
         # ── SharePoint Online ───────────────────────────────────────────────
@@ -324,7 +324,7 @@ function Connect-M365Services {
             }
         }
         if ($useDeviceAuth) {
-            Connect-SPOService -Url $SharePointAdminUrl -ModernAuth $true -UseSystemBrowser -ErrorAction Stop
+            Connect-SPOService -Url $SharePointAdminUrl -ModernAuth $true -UseSystemBrowser $true -ErrorAction Stop
         } else {
             Connect-SPOService -Url $SharePointAdminUrl -ModernAuth $true -ErrorAction Stop
         }
