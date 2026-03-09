@@ -12,7 +12,6 @@ function Script:Install-PrerequisitesAutomatically {
         @{ Name = "MicrosoftTeams"; MinVersion = $null }
     )
 
-    # Optional module for Power BI / Fabric automation (Section 9)
     $optionalPBI = Get-Module -ListAvailable -Name MicrosoftPowerBIMgmt.Profile -ErrorAction SilentlyContinue
     if (-not $optionalPBI) {
         Write-Host "[Optional] Installing MicrosoftPowerBIMgmt.Profile for Power BI automation (Section 9)..." -ForegroundColor Cyan
@@ -216,8 +215,6 @@ function Script:Fix-MicrosoftGraphVersion {
     return $false
 }
 
-# Prerequisites are now checked on first Connect-CISM365Benchmark call instead of module import
-# This prevents unwanted side effects when simply importing the module
 
 function Connect-CISM365Benchmark {
     [CmdletBinding()]
@@ -241,7 +238,6 @@ function Connect-CISM365Benchmark {
         [switch]$UseDeviceCode
     )
 
-    # Check and install prerequisites on first connection (deferred from module import)
     if (-not $Script:PrerequisiteCheckRun) {
         Script:Install-PrerequisitesAutomatically
         $Script:PrerequisiteCheckRun = $true
@@ -254,7 +250,6 @@ function Connect-CISM365Benchmark {
             Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
         }
 
-        # Check if already connected
         $currentContext = $null
         try { $currentContext = Get-MgContext } catch { Write-Verbose "No existing Graph context found" }
         if ($currentContext -and $currentContext.TenantId) {
@@ -262,7 +257,6 @@ function Connect-CISM365Benchmark {
             Write-Host "  Tenant ID: $($currentContext.TenantId)" -ForegroundColor White
             Write-Host "  Account: $($currentContext.Account)" -ForegroundColor White
 
-            # Check if we have the required scopes
             $currentScopes = if ($null -ne $currentContext.Scopes) { $currentContext.Scopes } else { @() }
             $missingScopes = $Scopes | Where-Object { $_ -notin $currentScopes }
             if ($missingScopes) {
@@ -279,23 +273,17 @@ function Connect-CISM365Benchmark {
             ContextScope  = 'Process'
         }
 
-        # PowerShell 7 specific handling
         if ($PSVersionTable.PSVersion.Major -ge 7) {
             Write-Host "PowerShell 7+ detected" -ForegroundColor Cyan
 
-            # If UseDeviceCode is requested, set env var for downstream connections (SPO, Teams)
             if ($UseDeviceCode) {
                 $env:CIS_USE_DEVICE_CODE = "true"
             }
 
-            # PowerShell 7 has known issues with certain authentication methods
-            # We'll use a workaround by setting environment variables
             Write-Host "Configuring authentication for PowerShell 7 compatibility..." -ForegroundColor Yellow
 
-            # Set environment variable to disable problematic authentication methods
             $env:AZURE_IDENTITY_DISABLE_MULTITENANTAUTH = "true"
 
-            # If device code was requested, use it directly
             if ($UseDeviceCode) {
                 $authMethods = @(
                     @{
@@ -308,7 +296,6 @@ function Connect-CISM365Benchmark {
                     }
                 )
             } else {
-                # Try different authentication methods in order
                 $authMethods = @(
                     @{
                         Name = "Interactive Browser"
@@ -322,7 +309,6 @@ function Connect-CISM365Benchmark {
                         Params = @{
                             Scopes = $Scopes
                             NoWelcome = $true
-                            # Uses Microsoft Graph PowerShell SDK default ClientId
                         }
                     },
                     @{
@@ -346,12 +332,10 @@ function Connect-CISM365Benchmark {
                 }
                 catch {
                     Write-Verbose "Failed with $($method.Name): $_"
-                    # Continue to next method
                 }
             }
 
             if (-not $connected) {
-                # If all methods fail, provide specific guidance
                 Write-Host "`n⚠ PowerShell 7 Authentication Issue Detected" -ForegroundColor Yellow
                 Write-Host "This is a known compatibility issue with Microsoft.Graph module in PowerShell 7." -ForegroundColor Yellow
                 Write-Host "`nWorkarounds:" -ForegroundColor Cyan
@@ -365,10 +349,8 @@ function Connect-CISM365Benchmark {
             }
         }
         else {
-            # PowerShell 5.1 - use standard authentication
             if ($UseDeviceCode) {
                 $params['UseDeviceCode'] = $true
-                # Set environment variable so downstream connections (SPO, Teams) also use device-friendly auth
                 $env:CIS_USE_DEVICE_CODE = "true"
             }
             Connect-MgGraph @params
@@ -847,22 +829,11 @@ function Get-CISM365BenchmarkInfo {
 }
 
 function Disconnect-CISM365Benchmark {
-    <#
-    .SYNOPSIS
-        Disconnects all Microsoft 365 service sessions established by Connect-CISM365Benchmark.
-    .DESCRIPTION
-        Cleanly disconnects Microsoft Graph, Exchange Online, SharePoint Online,
-        Microsoft Teams, Security & Compliance (IPPS), and Power BI sessions.
-        Also removes any environment variables set during the session.
-    .EXAMPLE
-        Disconnect-CISM365Benchmark
-    #>
     [CmdletBinding()]
     param()
 
     Write-Host "`nDisconnecting from Microsoft 365 services..." -ForegroundColor Yellow
 
-    # Microsoft Graph
     try {
         if (Get-MgContext -ErrorAction SilentlyContinue) {
             Disconnect-MgGraph -ErrorAction Stop | Out-Null
@@ -871,7 +842,6 @@ function Disconnect-CISM365Benchmark {
     }
     catch { Write-Host "  Could not disconnect Microsoft Graph: $_" -ForegroundColor DarkYellow }
 
-    # Exchange Online
     try {
         Get-PSSession | Where-Object { $_.ConfigurationName -eq 'Microsoft.Exchange' -or $_.Name -like '*ExchangeOnline*' } | ForEach-Object {
             Remove-PSSession $_ -ErrorAction SilentlyContinue
@@ -883,7 +853,6 @@ function Disconnect-CISM365Benchmark {
     }
     catch { Write-Host "  Could not disconnect Exchange Online: $_" -ForegroundColor DarkYellow }
 
-    # SharePoint Online
     try {
         if (Get-Command Disconnect-SPOService -ErrorAction SilentlyContinue) {
             Disconnect-SPOService -ErrorAction SilentlyContinue
@@ -892,7 +861,6 @@ function Disconnect-CISM365Benchmark {
     }
     catch { Write-Host "  Could not disconnect SharePoint Online: $_" -ForegroundColor DarkYellow }
 
-    # Microsoft Teams
     try {
         if (Get-Command Disconnect-MicrosoftTeams -ErrorAction SilentlyContinue) {
             Disconnect-MicrosoftTeams -ErrorAction SilentlyContinue
@@ -901,7 +869,6 @@ function Disconnect-CISM365Benchmark {
     }
     catch { Write-Host "  Could not disconnect Microsoft Teams: $_" -ForegroundColor DarkYellow }
 
-    # Security & Compliance (IPPS uses a remote PSSession)
     try {
         Get-PSSession | Where-Object { $_.ConfigurationName -eq 'Microsoft.Exchange' -and $_.ComputerName -like '*compliance*' } | ForEach-Object {
             Remove-PSSession $_ -ErrorAction SilentlyContinue
@@ -910,12 +877,10 @@ function Disconnect-CISM365Benchmark {
     }
     catch { Write-Host "  Could not disconnect Security & Compliance: $_" -ForegroundColor DarkYellow }
 
-    # Clean up environment variables
     @('CIS_USE_DEVICE_CODE', 'AZURE_IDENTITY_DISABLE_MULTITENANTAUTH') | ForEach-Object {
         if (Test-Path "Env:\$_") { Remove-Item "Env:\$_" -ErrorAction SilentlyContinue }
     }
 
-    # Reset prerequisite check flag so next Connect re-checks
     $Script:PrerequisiteCheckRun = $false
 
     Write-Host "`nAll sessions disconnected.`n" -ForegroundColor Green
