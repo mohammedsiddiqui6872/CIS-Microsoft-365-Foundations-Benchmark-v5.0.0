@@ -536,11 +536,11 @@ function Invoke-CISM365Benchmark {
 
             if ($csvReport) {
                 $reportData = Import-Csv -Path $csvReport.FullName
-                $passed = ($reportData | Where-Object { $_.Result -eq 'Pass' }).Count
-                $failed = ($reportData | Where-Object { $_.Result -eq 'Fail' }).Count
-                $manual = ($reportData | Where-Object { $_.Result -eq 'Manual' }).Count
-                $errors = ($reportData | Where-Object { $_.Result -eq 'Error' }).Count
-                $total = $reportData.Count
+                $passed = @($reportData | Where-Object { $_.Result -eq 'Pass' }).Count
+                $failed = @($reportData | Where-Object { $_.Result -eq 'Fail' }).Count
+                $manual = @($reportData | Where-Object { $_.Result -eq 'Manual' }).Count
+                $errors = @($reportData | Where-Object { $_.Result -eq 'Error' }).Count
+                $total = @($reportData).Count
 
                 $complianceRate = if ($total -gt 0 -and ($total - $manual) -gt 0) {
                     [math]::Round(($passed / ($total - $manual)) * 100, 2)

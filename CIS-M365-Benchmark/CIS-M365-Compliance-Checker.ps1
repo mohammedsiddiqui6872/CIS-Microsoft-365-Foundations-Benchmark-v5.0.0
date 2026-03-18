@@ -536,7 +536,7 @@ function Test-M365AdminCenter {
                 }
             }
         }
-        $enabledPolicyCount = ($caPolicies | Where-Object { $_.State -eq 'enabled' }).Count
+        $enabledPolicyCount = @($caPolicies | Where-Object { $_.State -eq 'enabled' }).Count
 
         $emergencyAccounts = @()
         foreach ($member in $globalAdminMembers) {
@@ -577,7 +577,7 @@ function Test-M365AdminCenter {
         Write-Log "Checking 1.1.3 - Global admin count" -Level Info
         $globalAdminRole = Get-MgDirectoryRole -Filter "DisplayName eq 'Global Administrator'" -ErrorAction Stop
         $globalAdmins = Get-MgDirectoryRoleMember -DirectoryRoleId $globalAdminRole.Id -ErrorAction Stop
-        $globalAdminCount = $globalAdmins.Count
+        $globalAdminCount = @($globalAdmins).Count
 
         if ($globalAdminCount -ge 2 -and $globalAdminCount -le 4) {
             Add-Result -ControlNumber "1.1.3" -ControlTitle "Ensure that between two and four global admins are designated" `
@@ -636,9 +636,9 @@ function Test-M365AdminCenter {
             }
         }
 
-        if ($adminsWithHeavyLicenses.Count -eq 0) {
+        if (@($adminsWithHeavyLicenses).Count -eq 0) {
             Add-Result -ControlNumber "1.1.4" -ControlTitle "Ensure administrative accounts use licenses with a reduced application footprint" `
-                       -ProfileLevel "L1" -Result "Pass" -Details "All $($adminUserIds.Count) admin accounts use only reduced-footprint licenses"
+                       -ProfileLevel "L1" -Result "Pass" -Details "All $(@($adminUserIds).Count) admin accounts use only reduced-footprint licenses"
         }
         else {
             Add-Result -ControlNumber "1.1.4" -ControlTitle "Ensure administrative accounts use licenses with a reduced application footprint" `
@@ -657,7 +657,7 @@ function Test-M365AdminCenter {
         $allGroups = Get-MgGroup -All -Property DisplayName,Visibility,Id -ErrorAction Stop
         $publicGroups = $allGroups | Where-Object { $_.Visibility -eq 'Public' }
 
-        if ($publicGroups.Count -eq 0) {
+        if (@($publicGroups).Count -eq 0) {
             Add-Result -ControlNumber "1.2.1" -ControlTitle "Ensure that only organizationally managed/approved public groups exist" `
                        -ProfileLevel "L2" -Result "Pass" -Details "No public groups found"
         }
@@ -685,7 +685,7 @@ function Test-M365AdminCenter {
             }
         }
 
-        if ($enabledSharedMB.Count -eq 0) {
+        if (@($enabledSharedMB).Count -eq 0) {
             Add-Result -ControlNumber "1.2.2" -ControlTitle "Ensure sign-in to shared mailboxes is blocked" `
                        -ProfileLevel "L1" -Result "Pass" -Details "All shared mailboxes have sign-in disabled"
         }
@@ -1165,7 +1165,7 @@ function Test-M365Defender {
     try {
         Write-Log "Checking 2.1.9 - DKIM enabled" -Level Info
         $dkimConfigs = Get-DkimSigningConfig
-        $disabledDkim = $dkimConfigs | Where-Object { $_.Enabled -eq $false -and $_.Domain -notlike "*.onmicrosoft.com" }
+        $disabledDkim = @($dkimConfigs | Where-Object { $_.Enabled -eq $false -and $_.Domain -notlike "*.onmicrosoft.com" })
 
         if ($disabledDkim.Count -eq 0) {
             Add-Result -ControlNumber "2.1.9" -ControlTitle "Ensure that DKIM is enabled for all Exchange Online Domains" `
@@ -1302,13 +1302,13 @@ function Test-M365Defender {
         if ($null -eq $cachedConnectionFilterPolicy) { throw "ConnectionFilterPolicy data unavailable" }
         $connectionFilter = $cachedConnectionFilterPolicy
 
-        if ($connectionFilter.IPAllowList.Count -eq 0) {
+        if (@($connectionFilter.IPAllowList).Count -eq 0) {
             Add-Result -ControlNumber "2.1.12" -ControlTitle "Ensure the connection filter IP allow list is not used" `
                        -ProfileLevel "L1" -Result "Pass" -Details "IP allow list is empty"
         }
         else {
             Add-Result -ControlNumber "2.1.12" -ControlTitle "Ensure the connection filter IP allow list is not used" `
-                       -ProfileLevel "L1" -Result "Fail" -Details "IP allow list contains $($connectionFilter.IPAllowList.Count) entries" `
+                       -ProfileLevel "L1" -Result "Fail" -Details "IP allow list contains $(@($connectionFilter.IPAllowList).Count) entries" `
                        -Remediation "Remove all entries from IP allow list"
         }
     }
@@ -1358,12 +1358,12 @@ function Test-M365Defender {
             }
         }
 
-        if ($policiesWithAllowedItems.Count -eq 0) {
+        if (@($policiesWithAllowedItems).Count -eq 0) {
             Add-Result -ControlNumber "2.1.14" -ControlTitle "Ensure inbound anti-spam policies do not contain allowed domains" `
                        -ProfileLevel "L1" -Result "Pass" -Details "No allowed domains/senders configured in anti-spam policies"
         }
         else {
-            $failDetails = "Found $totalAllowedDomains allowed domain(s) and $totalAllowedSenders allowed sender(s) across $($policiesWithAllowedItems.Count) policy/policies. " +
+            $failDetails = "Found $totalAllowedDomains allowed domain(s) and $totalAllowedSenders allowed sender(s) across $(@($policiesWithAllowedItems).Count) policy/policies. " +
                           "Details: $($policiesWithAllowedItems -join '; '). " +
                           "Note: CIS recommends zero allowed domains/senders. Review each entry to ensure it's required for business operations."
 
@@ -1436,9 +1436,17 @@ function Test-M365Defender {
         }
     }
     catch {
-        Add-Result -ControlNumber "2.4.2" -ControlTitle "Ensure Priority accounts have 'Strict protection' presets applied" `
-                   -ProfileLevel "L1" -Result "Manual" -Details "Unable to check Strict Preset policy: $_" `
-                   -Remediation "Verify strict protection preset is applied to priority accounts in M365 Defender"
+        $errMsg = "$_"
+        if ($errMsg -match "couldn't be found" -or $errMsg -match "not found" -or $errMsg -match "does not exist") {
+            Add-Result -ControlNumber "2.4.2" -ControlTitle "Ensure Priority accounts have 'Strict protection' presets applied" `
+                       -ProfileLevel "L1" -Result "Fail" -Details "Strict Preset Security Policy does not exist in this tenant" `
+                       -Remediation "Enable Strict Preset Security Policy and apply to priority accounts in M365 Defender"
+        }
+        else {
+            Add-Result -ControlNumber "2.4.2" -ControlTitle "Ensure Priority accounts have 'Strict protection' presets applied" `
+                       -ProfileLevel "L1" -Result "Manual" -Details "Unable to check Strict Preset policy: $_" `
+                       -Remediation "Verify strict protection preset is applied to priority accounts in M365 Defender"
+        }
     }
 
     Add-Result -ControlNumber "2.4.3" -ControlTitle "Ensure Microsoft Defender for Cloud Apps is enabled and configured" `
@@ -1533,7 +1541,7 @@ function Test-Purview {
         Write-Log "Checking 3.2.1 - DLP policies enabled" -Level Info
         try {
             $dlpPolicies = Get-DlpCompliancePolicy -ErrorAction Stop
-            $enabledDlpPolicies = $dlpPolicies | Where-Object { $_.Enabled -eq $true }
+            $enabledDlpPolicies = @($dlpPolicies | Where-Object { $_.Enabled -eq $true })
 
             if ($enabledDlpPolicies.Count -gt 0) {
                 Add-Result -ControlNumber "3.2.1" -ControlTitle "Ensure DLP policies are enabled" `
@@ -1593,7 +1601,7 @@ function Test-Purview {
     try {
         Write-Log "Checking 3.3.1 - Sensitivity label policies" -Level Info
         try {
-            $labelPolicies = Get-LabelPolicy -ErrorAction Stop
+            $labelPolicies = @(Get-LabelPolicy -ErrorAction Stop)
             if ($labelPolicies.Count -gt 0) {
                 $enabledPolicies = @($labelPolicies | Where-Object { $_.Mode -ne "PendingDeletion" })
                 if ($enabledPolicies.Count -gt 0) {
@@ -1782,14 +1790,14 @@ function Test-EntraID {
         }
 
         if ($bulkWorked) {
-            if ($perUserMfaUsers.Count -eq 0) {
+            if (@($perUserMfaUsers).Count -eq 0) {
                 Add-Result -ControlNumber "5.1.2.1" -ControlTitle "Ensure 'Per-user MFA' is disabled" `
                            -ProfileLevel "L1" -Result "Pass" -Details "No per-user MFA enabled (use Conditional Access instead)"
             }
             else {
                 $sample = ($perUserMfaUsers | Select-Object -First 5 | ForEach-Object { $_.userPrincipalName }) -join ", "
                 Add-Result -ControlNumber "5.1.2.1" -ControlTitle "Ensure 'Per-user MFA' is disabled" `
-                           -ProfileLevel "L1" -Result "Fail" -Details "$($perUserMfaUsers.Count) users have per-user MFA enabled (e.g. $sample)" `
+                           -ProfileLevel "L1" -Result "Fail" -Details "$(@($perUserMfaUsers).Count) users have per-user MFA enabled (e.g. $sample)" `
                            -Remediation "Disable per-user MFA and use Conditional Access policies instead"
             }
         }
@@ -1848,7 +1856,7 @@ function Test-EntraID {
     try {
         Write-Log "Checking 5.1.2.4 - Restrict Entra admin center access" -Level Info
         if ($null -eq $cachedBetaAuthPolicy) { throw "Beta authorization policy data unavailable" }
-        $restrictNonAdmin = $cachedBetaAuthPolicy.defaultUserRolePermissions.allowedToReadOtherUsers
+        $restrictNonAdmin = $cachedBetaAuthPolicy.value.defaultUserRolePermissions.allowedToReadOtherUsers
         if ($restrictNonAdmin -eq $false) {
             Add-Result -ControlNumber "5.1.2.4" -ControlTitle "Ensure access to the Entra admin center is restricted" `
                        -ProfileLevel "L1" -Result "Pass" -Details "Non-admin access to Entra admin center is restricted"
@@ -2135,7 +2143,7 @@ function Test-EntraID {
         $consentEnabled = $false
         $enabledPolicies = @()
 
-        if ($consentPolicies -and $consentPolicies.Count -gt 0) {
+        if ($consentPolicies -and @($consentPolicies).Count -gt 0) {
             foreach ($policy in $consentPolicies) {
                 if ($policy -like "ManagePermissionGrantsForSelf*") {
                     $consentEnabled = $true
@@ -2150,7 +2158,7 @@ function Test-EntraID {
                        -Remediation "Remove user consent policies: Update-MgPolicyAuthorizationPolicy -DefaultUserRolePermissions @{PermissionGrantPoliciesAssigned=@()}"
         }
         else {
-            $details = if ($consentPolicies.Count -eq 0) { "User consent disabled (no policies assigned)" } else { "User consent disabled (no consent-enabling policies found)" }
+            $details = if (@($consentPolicies).Count -eq 0) { "User consent disabled (no policies assigned)" } else { "User consent disabled (no consent-enabling policies found)" }
             Add-Result -ControlNumber "5.1.5.1" -ControlTitle "Ensure user consent to apps accessing company data on their behalf is not allowed" `
                        -ProfileLevel "L2" -Result "Pass" -Details $details
         }
@@ -2329,7 +2337,7 @@ function Test-EntraID {
                 }
 
                 $includedRoles = $policy.Conditions.Users.IncludeRoles
-                $missingRoles = $criticalAdminRoles | Where-Object { $_ -notin $includedRoles }
+                $missingRoles = @($criticalAdminRoles | Where-Object { $_ -notin $includedRoles })
 
                 if ($missingRoles.Count -eq 0) {
                     $adminMfaPolicy = $policy
@@ -2342,13 +2350,13 @@ function Test-EntraID {
             $coverageType = if ($adminMfaPolicy.Conditions.Users.IncludeRoles -contains "All") {
                 "all directory roles"
             } else {
-                "$($adminMfaPolicy.Conditions.Users.IncludeRoles.Count) administrative roles"
+                "$(@($adminMfaPolicy.Conditions.Users.IncludeRoles).Count) administrative roles"
             }
 
             $exclusionWarning = ""
             if ($adminMfaPolicy.Conditions.Users.ExcludeUsers -or $adminMfaPolicy.Conditions.Users.ExcludeRoles) {
-                $excludedRoleCount = if ($adminMfaPolicy.Conditions.Users.ExcludeRoles) { $adminMfaPolicy.Conditions.Users.ExcludeRoles.Count } else { 0 }
-                $excludedUserCount = if ($adminMfaPolicy.Conditions.Users.ExcludeUsers) { $adminMfaPolicy.Conditions.Users.ExcludeUsers.Count } else { 0 }
+                $excludedRoleCount = if ($adminMfaPolicy.Conditions.Users.ExcludeRoles) { @($adminMfaPolicy.Conditions.Users.ExcludeRoles).Count } else { 0 }
+                $excludedUserCount = if ($adminMfaPolicy.Conditions.Users.ExcludeUsers) { @($adminMfaPolicy.Conditions.Users.ExcludeUsers).Count } else { 0 }
                 $totalExclusions = $excludedRoleCount + $excludedUserCount
                 $exclusionWarning = " (Warning: $totalExclusions exclusions - $excludedUserCount users, $excludedRoleCount roles)"
             }
@@ -2376,11 +2384,11 @@ function Test-EntraID {
                 } | Select-Object -First 1
 
                 if ($partialPolicy) {
-                    $coveredRoles = $criticalAdminRoles | Where-Object { $_ -in $partialPolicy.Conditions.Users.IncludeRoles }
-                    $missingRoles = $criticalAdminRoles | Where-Object { $_ -notin $partialPolicy.Conditions.Users.IncludeRoles }
+                    $coveredRoles = @($criticalAdminRoles | Where-Object { $_ -in $partialPolicy.Conditions.Users.IncludeRoles })
+                    $missingRoles = @($criticalAdminRoles | Where-Object { $_ -notin $partialPolicy.Conditions.Users.IncludeRoles })
 
                     Add-Result -ControlNumber "5.2.2.1" -ControlTitle "Ensure multifactor authentication is enabled for all users in administrative roles" `
-                               -ProfileLevel "L1" -Result "Fail" -Details "CA policy covers only $($coveredRoles.Count) of $($criticalAdminRoles.Count) critical admin roles. Missing: $($missingRoles.Count) roles" `
+                               -ProfileLevel "L1" -Result "Fail" -Details "CA policy covers only $($coveredRoles.Count) of $(@($criticalAdminRoles).Count) critical admin roles. Missing: $($missingRoles.Count) roles" `
                                -Remediation "Update CA policy to target 'All directory roles' or include all critical administrative roles"
                 }
                 else {
@@ -2412,8 +2420,8 @@ function Test-EntraID {
         }
 
         if ($allUserMfaPolicy) {
-            $excludedUserCount = if ($allUserMfaPolicy.Conditions.Users.ExcludeUsers) { $allUserMfaPolicy.Conditions.Users.ExcludeUsers.Count } else { 0 }
-            $excludedGroupCount = if ($allUserMfaPolicy.Conditions.Users.ExcludeGroups) { $allUserMfaPolicy.Conditions.Users.ExcludeGroups.Count } else { 0 }
+            $excludedUserCount = if ($allUserMfaPolicy.Conditions.Users.ExcludeUsers) { @($allUserMfaPolicy.Conditions.Users.ExcludeUsers).Count } else { 0 }
+            $excludedGroupCount = if ($allUserMfaPolicy.Conditions.Users.ExcludeGroups) { @($allUserMfaPolicy.Conditions.Users.ExcludeGroups).Count } else { 0 }
             $totalExclusions = $excludedUserCount + $excludedGroupCount
 
             $maxAcceptableExclusions = 5
@@ -2472,7 +2480,7 @@ function Test-EntraID {
                 $hasOther = $policy.Conditions.ClientAppTypes -contains "other"
 
                 if (($hasExchangeActiveSync -and $hasOther) -or
-                    ($policy.Conditions.ClientAppTypes.Count -ge 4)) {
+                    (@($policy.Conditions.ClientAppTypes).Count -ge 4)) {
                     $legacyAuthBlockPolicy = $policy
                     break
                 }
@@ -2911,7 +2919,7 @@ function Test-EntraID {
 
                 if ($bannedPasswordsValue -and $bannedPasswordsValue.value -and $bannedPasswordsValue.value.Trim() -ne "") {
                     $passwords = $bannedPasswordsValue.value -split "[,\t]" | Where-Object { $_.Trim() -ne "" }
-                    $passwordCount = $passwords.Count
+                    $passwordCount = @($passwords).Count
                     Add-Result -ControlNumber "5.2.3.2" -ControlTitle "Ensure custom banned passwords lists are used" `
                                -ProfileLevel "L1" -Result "Pass" -Details "Custom banned password list configured with $passwordCount entries"
                 }
@@ -2997,7 +3005,7 @@ function Test-EntraID {
     try {
         Write-Log "Checking 5.2.3.4 - All users MFA capable" -Level Info
         $authMethods = Get-MgReportAuthenticationMethodUserRegistrationDetail -All -ErrorAction Stop
-        $nonMfaUsers = $authMethods | Where-Object { $_.IsMfaCapable -eq $false -and $_.UserType -eq "member" }
+        $nonMfaUsers = @($authMethods | Where-Object { $_.IsMfaCapable -eq $false -and $_.UserType -eq "member" })
 
         if ($nonMfaUsers.Count -eq 0) {
             Add-Result -ControlNumber "5.2.3.4" -ControlTitle "Ensure all member users are 'MFA capable'" `
@@ -3326,7 +3334,7 @@ function Test-ExchangeOnline {
             else {
                 $mbList = ($bypassMailboxes | Select-Object -ExpandProperty Identity -First 10) -join ', '
                 Add-Result -ControlNumber "6.1.3" -ControlTitle "Ensure 'AuditBypassEnabled' is not enabled on mailboxes" `
-                           -ProfileLevel "L1" -Result "Fail" -Details "$($bypassMailboxes.Count) mailboxes have bypass enabled: $mbList" `
+                           -ProfileLevel "L1" -Result "Fail" -Details "$(@($bypassMailboxes).Count) mailboxes have bypass enabled: $mbList" `
                            -Remediation "Disable audit bypass: Set-MailboxAuditBypassAssociation -Identity <mailbox> -AuditBypassEnabled `$false"
             }
         }
@@ -3485,7 +3493,7 @@ function Test-ExchangeOnline {
             }
         }
 
-        if ($policiesWithStorageProviders.Count -eq 0) {
+        if (@($policiesWithStorageProviders).Count -eq 0) {
             Add-Result -ControlNumber "6.5.3" -ControlTitle "Ensure additional storage providers are restricted in Outlook on the web" `
                        -ProfileLevel "L2" -Result "Pass" -Details "Third-party storage providers are disabled in all OWA policies"
         }
@@ -3910,12 +3918,12 @@ function Test-MicrosoftTeams {
         }
         elseif ($tenantFedConfig.AllowedDomains -and
                 $tenantFedConfig.AllowedDomains.AllowedDomain -and
-                $tenantFedConfig.AllowedDomains.AllowedDomain.Count -gt 0) {
+                @($tenantFedConfig.AllowedDomains.AllowedDomain).Count -gt 0) {
             $isRestricted = $true
-            $details = "External access restricted to allowlist ($($tenantFedConfig.AllowedDomains.AllowedDomain.Count) domains)"
+            $details = "External access restricted to allowlist ($(@($tenantFedConfig.AllowedDomains.AllowedDomain).Count) domains)"
         }
         elseif ($tenantFedConfig.BlockedDomains -and
-                $tenantFedConfig.BlockedDomains.Count -eq 0 -and
+                @($tenantFedConfig.BlockedDomains).Count -eq 0 -and
                 $tenantFedConfig.AllowPublicUsers -eq $true) {
             $isRestricted = $false
             $details = "External access is open to all domains (not restricted)"
@@ -4386,7 +4394,7 @@ function Test-PowerBI {
             Add-Result -ControlNumber "9.1.4" -ControlTitle "Ensure 'Publish to web' is restricted" `
                        -ProfileLevel "L1" -Result "Pass" -Details "Publish to web is disabled"
         }
-        elseif ($setting.enabled -eq $true -and $setting.enabledSecurityGroups -and $setting.enabledSecurityGroups.Count -gt 0) {
+        elseif ($setting.enabled -eq $true -and $setting.enabledSecurityGroups -and @($setting.enabledSecurityGroups).Count -gt 0) {
             $groups = ($setting.enabledSecurityGroups | ForEach-Object { $_.name }) -join ", "
             Add-Result -ControlNumber "9.1.4" -ControlTitle "Ensure 'Publish to web' is restricted" `
                        -ProfileLevel "L1" -Result "Pass" -Details "Publish to web restricted to security groups: $groups"
@@ -4526,7 +4534,7 @@ function Test-PowerBI {
             Add-Result -ControlNumber "9.1.10" -ControlTitle "Ensure access to APIs by Service Principals is restricted" `
                        -ProfileLevel "L1" -Result "Pass" -Details "Service principal API access is disabled"
         }
-        elseif ($setting.enabled -eq $true -and $setting.enabledSecurityGroups -and $setting.enabledSecurityGroups.Count -gt 0) {
+        elseif ($setting.enabled -eq $true -and $setting.enabledSecurityGroups -and @($setting.enabledSecurityGroups).Count -gt 0) {
             $groups = ($setting.enabledSecurityGroups | ForEach-Object { $_.name }) -join ", "
             Add-Result -ControlNumber "9.1.10" -ControlTitle "Ensure access to APIs by Service Principals is restricted" `
                        -ProfileLevel "L1" -Result "Pass" -Details "Service principal API access restricted to security groups: $groups"
@@ -4578,7 +4586,7 @@ function Test-PowerBI {
             Add-Result -ControlNumber "9.1.12" -ControlTitle "Ensure service principals ability to create workspaces, connections and deployment pipelines is restricted" `
                        -ProfileLevel "L1" -Result "Pass" -Details "Service principal workspace/pipeline creation is disabled"
         }
-        elseif ($spSetting.enabled -eq $true -and $spSetting.enabledSecurityGroups -and $spSetting.enabledSecurityGroups.Count -gt 0) {
+        elseif ($spSetting.enabled -eq $true -and $spSetting.enabledSecurityGroups -and @($spSetting.enabledSecurityGroups).Count -gt 0) {
             $groups = ($spSetting.enabledSecurityGroups | ForEach-Object { $_.name }) -join ", "
             Add-Result -ControlNumber "9.1.12" -ControlTitle "Ensure service principals ability to create workspaces, connections and deployment pipelines is restricted" `
                        -ProfileLevel "L1" -Result "Pass" -Details "Service principal workspace/pipeline creation restricted to security groups: $groups"
